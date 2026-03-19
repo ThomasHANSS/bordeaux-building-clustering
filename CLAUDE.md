@@ -240,3 +240,23 @@ Complétude : ~25% (feature optionnelle, pas primaire).
 - Moran's I (cohérence spatiale) non calculé
 - Agglomerative nécessite un échantillon <10k (mémoire)
 - Les features DPE (<20%) et DVF (<25%) sont exclues du clustering primaire
+
+## Conventions de numérotation — OBLIGATOIRE
+
+### Expériences (experiments.json)
+- L'ID suit le format `run_XXX` avec numéro incrémental
+- Lire experiments.json AVANT d'ajouter un run pour connaître le dernier numéro
+- Ne JAMAIS écraser un run existant
+
+### Rapports PDF
+- Format : `clustering_bordeaux_vX.pdf` (v1, v2, v3...)
+- Lire le dossier `outputs/reports/` AVANT de générer pour connaître le dernier numéro
+- Chaque nouveau rapport incrémente la version
+
+### Figures
+- Préfixer par le numéro de version : `report_v3_carte.png`, `report_v3_zoom.png`
+- Ne PAS écraser les figures des versions précédentes
+
+### Scripts
+- Garder les scripts précédents (first_run.py, generate_report_v2.py)
+- Nommer les nouveaux : `clustering_run_v2.py`, `generate_report_v3.py`
