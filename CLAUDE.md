@@ -185,3 +185,58 @@ Quand une nouvelle source est ajoutée :
 - Cardinalité ≤ seuil config (`encoding.onehot_max_cardinality`) → one-hot encoding
 - Cardinalité > seuil → ordinal encoding ou target encoding
 - Seuil configurable dans config.yaml
+
+## État actuel du projet (mars 2026)
+
+### Données
+- La BDNB est en format **GeoPackage** : `data/raw/bdnb_33/gpkg/bdnb.gpkg`
+- Table principale : `batiment_groupe_compile` (277 colonnes)
+- Charger avec filtre SQL pour éviter les problèmes mémoire :
+```python
+  gdf = gpd.read_file(gpkg_path, layer='batiment_groupe_compile',
+      where=f"code_commune_insee IN ('{codes_sql}')")
+```
+- **264 291 bâtiments** sur le dept 33, **234 116** après filtrage métropole + surface
+- Le Codespace a ~8 Go de RAM : ne JAMAIS charger le gpkg entier sans filtre SQL
+
+### DVF déjà intégrée dans la BDNB
+Les colonnes `dvf_open_*` sont déjà dans `batiment_groupe_compile`.
+Pas besoin de jointure spatiale séparée pour les prix.
+Complétude : ~25% (feature optionnelle, pas primaire).
+
+### Premier clustering réalisé (run_001 à run_003)
+- Algorithme retenu : **KMeans k=15** (silhouette=0.350, DB=1.07, CH=52911)
+- GMM : silhouette=0.125 (mauvais)
+- Agglomerative : silhouette=0.324 (correct mais inférieur)
+- Résultats sauvegardés dans `data/processed/clustered.geoparquet`
+- Détail des runs dans `outputs/experiments.json`
+
+### Les 15 clusters identifiés
+- 0: Pavillon plain-pied (157m², 4m) — 10 890 bâtiments
+- 1: Petit bâti non classé (40m², 3m, usage inconnu) — 46 823 bâtiments ⚠️ fourre-tout
+- 2: Maison R+1 (101m², 6m) — 30 495
+- 3: Pavillon standard (133m², 4m) — 56 137
+- 4: Tertiaire moyen (1132m², 5m) — 1 278
+- 5: Petit collectif (820m², 11m) — 2 830
+- 6: Grand collectif (3226m², 13m) — 222
+- 7: Collectif R+4/R+5 (135m², 15m) — 6 449
+- 8: Individuel dense R+2 (99m², 9m) — 15 571
+- 9: Individuel compact (94m², 5m) — 27 906
+- 10: Grand équipement (4794m², 6m) — 720
+- 11: Maison R+1 type (101m², 5m) — 25 335
+- 12: Tour / IGH (704m², 23m) — 349
+- 13: Grande maison (282m², 4m) — 1 211
+- 14: Tertiaire courant (409m², 7m) — 7 900
+
+### Scripts existants
+- `first_run.py` : clustering complet (chargement → KMeans/GMM/Agglo → évaluation → sauvegarde)
+- `generate_report_v2.py` : rapport PDF avec cartes, tableaux, règles
+- `make_map_v2.py` : cartes statiques + Folium
+
+### Points d'attention connus
+- Le cluster 1 (46k bâtiments, 20%) est un fourre-tout à investiguer
+- Les clusters 2, 9, 11 se ressemblent (individuel ~100m²) — à différencier
+- HDBSCAN n'a pas encore été testé
+- Moran's I (cohérence spatiale) non calculé
+- Agglomerative nécessite un échantillon <10k (mémoire)
+- Les features DPE (<20%) et DVF (<25%) sont exclues du clustering primaire
