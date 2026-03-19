@@ -332,7 +332,7 @@ async function loadCluster(clId) {{
                 fillColor: meta.color,
                 color: '#000000',
                 weight: 0.8,
-                fillOpacity: 0.6,
+                fillOpacity: 1.0,
             }}),
             onEachFeature: (feature, layer) => {{
                 layer.bindPopup(() => formatPopup(feature.properties, clId), {{ maxWidth: 300 }});
