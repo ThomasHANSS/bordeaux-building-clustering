@@ -314,6 +314,365 @@
         "bdnb"
       ],
       "notes": "Premier run — BDNB seule"
+    },
+    {
+      "id": "run_010",
+      "date": "2026-03-19T14:28:33.103274",
+      "algorithm": "kmeans",
+      "params": {
+        "n_clusters": 15
+      },
+      "n_clusters": 15,
+      "n_noise": 0,
+      "noise_pct": 0,
+      "features_used": [
+        "surface_bat",
+        "hauteur_mean",
+        "hauteur_max",
+        "nb_niveaux",
+        "annee_construction",
+        "nb_logements",
+        "usage_principal_enc",
+        "usage_foncier_enc",
+        "mat_murs_enc",
+        "nature_bdtopo_enc",
+        "usage_bdtopo_enc"
+      ],
+      "n_features": 11,
+      "n_samples": 150119,
+      "metrics": {
+        "silhouette": 0.2806,
+        "davies_bouldin": 1.0272,
+        "calinski_harabasz": 27285.7
+      },
+      "data_sources": [
+        "bdnb"
+      ],
+      "notes": "KMeans v2 — résidentiel individuel (nb_log<4, usage=Résidentiel individuel)"
+    },
+    {
+      "id": "run_011",
+      "date": "2026-03-19T14:28:33.103296",
+      "algorithm": "hdbscan",
+      "params": {
+        "min_cluster_size": 100,
+        "min_samples": 10
+      },
+      "n_clusters": 52,
+      "n_noise": 10667,
+      "noise_pct": 0.2667,
+      "features_used": [
+        "surface_bat",
+        "hauteur_mean",
+        "hauteur_max",
+        "nb_niveaux",
+        "annee_construction",
+        "nb_logements",
+        "usage_principal_enc",
+        "usage_foncier_enc",
+        "mat_murs_enc",
+        "nature_bdtopo_enc",
+        "usage_bdtopo_enc"
+      ],
+      "n_features": 11,
+      "n_samples": 40000,
+      "metrics": {
+        "silhouette": 0.1671,
+        "davies_bouldin": 1.5692,
+        "calinski_harabasz": 2576.2
+      },
+      "data_sources": [
+        "bdnb"
+      ],
+      "notes": "HDBSCAN grid (échantillon) v2 — résidentiel individuel (nb_log<4, usage=Résidentiel individuel) mcs=100 ms=10"
+    },
+    {
+      "id": "run_012",
+      "date": "2026-03-19T14:28:33.103306",
+      "algorithm": "hdbscan",
+      "params": {
+        "min_cluster_size": 100,
+        "min_samples": 50
+      },
+      "n_clusters": 39,
+      "n_noise": 14453,
+      "noise_pct": 0.3613,
+      "features_used": [
+        "surface_bat",
+        "hauteur_mean",
+        "hauteur_max",
+        "nb_niveaux",
+        "annee_construction",
+        "nb_logements",
+        "usage_principal_enc",
+        "usage_foncier_enc",
+        "mat_murs_enc",
+        "nature_bdtopo_enc",
+        "usage_bdtopo_enc"
+      ],
+      "n_features": 11,
+      "n_samples": 40000,
+      "metrics": {
+        "silhouette": 0.2468,
+        "davies_bouldin": 1.3705,
+        "calinski_harabasz": 3741.6
+      },
+      "data_sources": [
+        "bdnb"
+      ],
+      "notes": "HDBSCAN grid (échantillon) v2 — résidentiel individuel (nb_log<4, usage=Résidentiel individuel) mcs=100 ms=50"
+    },
+    {
+      "id": "run_013",
+      "date": "2026-03-19T14:28:33.103312",
+      "algorithm": "hdbscan",
+      "params": {
+        "min_cluster_size": 200,
+        "min_samples": 10
+      },
+      "n_clusters": 38,
+      "n_noise": 8486,
+      "noise_pct": 0.2122,
+      "features_used": [
+        "surface_bat",
+        "hauteur_mean",
+        "hauteur_max",
+        "nb_niveaux",
+        "annee_construction",
+        "nb_logements",
+        "usage_principal_enc",
+        "usage_foncier_enc",
+        "mat_murs_enc",
+        "nature_bdtopo_enc",
+        "usage_bdtopo_enc"
+      ],
+      "n_features": 11,
+      "n_samples": 40000,
+      "metrics": {
+        "silhouette": 0.1374,
+        "davies_bouldin": 1.8311,
+        "calinski_harabasz": 3271.4
+      },
+      "data_sources": [
+        "bdnb"
+      ],
+      "notes": "HDBSCAN grid (échantillon) v2 — résidentiel individuel (nb_log<4, usage=Résidentiel individuel) mcs=200 ms=10"
+    },
+    {
+      "id": "run_014",
+      "date": "2026-03-19T14:28:33.103318",
+      "algorithm": "hdbscan",
+      "params": {
+        "min_cluster_size": 200,
+        "min_samples": 50
+      },
+      "n_clusters": 29,
+      "n_noise": 14326,
+      "noise_pct": 0.3582,
+      "features_used": [
+        "surface_bat",
+        "hauteur_mean",
+        "hauteur_max",
+        "nb_niveaux",
+        "annee_construction",
+        "nb_logements",
+        "usage_principal_enc",
+        "usage_foncier_enc",
+        "mat_murs_enc",
+        "nature_bdtopo_enc",
+        "usage_bdtopo_enc"
+      ],
+      "n_features": 11,
+      "n_samples": 40000,
+      "metrics": {
+        "silhouette": 0.2294,
+        "davies_bouldin": 1.4561,
+        "calinski_harabasz": 4002.3
+      },
+      "data_sources": [
+        "bdnb"
+      ],
+      "notes": "HDBSCAN grid (échantillon) v2 — résidentiel individuel (nb_log<4, usage=Résidentiel individuel) mcs=200 ms=50"
+    },
+    {
+      "id": "run_015",
+      "date": "2026-03-19T14:28:33.103323",
+      "algorithm": "hdbscan",
+      "params": {
+        "min_cluster_size": 500,
+        "min_samples": 10
+      },
+      "n_clusters": 21,
+      "n_noise": 6851,
+      "noise_pct": 0.1713,
+      "features_used": [
+        "surface_bat",
+        "hauteur_mean",
+        "hauteur_max",
+        "nb_niveaux",
+        "annee_construction",
+        "nb_logements",
+        "usage_principal_enc",
+        "usage_foncier_enc",
+        "mat_murs_enc",
+        "nature_bdtopo_enc",
+        "usage_bdtopo_enc"
+      ],
+      "n_features": 11,
+      "n_samples": 40000,
+      "metrics": {
+        "silhouette": 0.0828,
+        "davies_bouldin": 2.1451,
+        "calinski_harabasz": 3767.2
+      },
+      "data_sources": [
+        "bdnb"
+      ],
+      "notes": "HDBSCAN grid (échantillon) v2 — résidentiel individuel (nb_log<4, usage=Résidentiel individuel) mcs=500 ms=10"
+    },
+    {
+      "id": "run_016",
+      "date": "2026-03-19T14:28:33.103329",
+      "algorithm": "hdbscan",
+      "params": {
+        "min_cluster_size": 500,
+        "min_samples": 50
+      },
+      "n_clusters": 14,
+      "n_noise": 12975,
+      "noise_pct": 0.3244,
+      "features_used": [
+        "surface_bat",
+        "hauteur_mean",
+        "hauteur_max",
+        "nb_niveaux",
+        "annee_construction",
+        "nb_logements",
+        "usage_principal_enc",
+        "usage_foncier_enc",
+        "mat_murs_enc",
+        "nature_bdtopo_enc",
+        "usage_bdtopo_enc"
+      ],
+      "n_features": 11,
+      "n_samples": 40000,
+      "metrics": {
+        "silhouette": 0.1109,
+        "davies_bouldin": 2.1029,
+        "calinski_harabasz": 4449.4
+      },
+      "data_sources": [
+        "bdnb"
+      ],
+      "notes": "HDBSCAN grid (échantillon) v2 — résidentiel individuel (nb_log<4, usage=Résidentiel individuel) mcs=500 ms=50"
+    },
+    {
+      "id": "run_017",
+      "date": "2026-03-19T14:28:33.103334",
+      "algorithm": "hdbscan",
+      "params": {
+        "min_cluster_size": 1000,
+        "min_samples": 10
+      },
+      "n_clusters": 10,
+      "n_noise": 10435,
+      "noise_pct": 0.2609,
+      "features_used": [
+        "surface_bat",
+        "hauteur_mean",
+        "hauteur_max",
+        "nb_niveaux",
+        "annee_construction",
+        "nb_logements",
+        "usage_principal_enc",
+        "usage_foncier_enc",
+        "mat_murs_enc",
+        "nature_bdtopo_enc",
+        "usage_bdtopo_enc"
+      ],
+      "n_features": 11,
+      "n_samples": 40000,
+      "metrics": {
+        "silhouette": 0.1035,
+        "davies_bouldin": 2.4384,
+        "calinski_harabasz": 4028.0
+      },
+      "data_sources": [
+        "bdnb"
+      ],
+      "notes": "HDBSCAN grid (échantillon) v2 — résidentiel individuel (nb_log<4, usage=Résidentiel individuel) mcs=1000 ms=10"
+    },
+    {
+      "id": "run_018",
+      "date": "2026-03-19T14:28:33.103343",
+      "algorithm": "hdbscan",
+      "params": {
+        "min_cluster_size": 1000,
+        "min_samples": 50
+      },
+      "n_clusters": 9,
+      "n_noise": 14853,
+      "noise_pct": 0.3713,
+      "features_used": [
+        "surface_bat",
+        "hauteur_mean",
+        "hauteur_max",
+        "nb_niveaux",
+        "annee_construction",
+        "nb_logements",
+        "usage_principal_enc",
+        "usage_foncier_enc",
+        "mat_murs_enc",
+        "nature_bdtopo_enc",
+        "usage_bdtopo_enc"
+      ],
+      "n_features": 11,
+      "n_samples": 40000,
+      "metrics": {
+        "silhouette": 0.136,
+        "davies_bouldin": 2.533,
+        "calinski_harabasz": 4210.0
+      },
+      "data_sources": [
+        "bdnb"
+      ],
+      "notes": "HDBSCAN grid (échantillon) v2 — résidentiel individuel (nb_log<4, usage=Résidentiel individuel) mcs=1000 ms=50"
+    },
+    {
+      "id": "run_019",
+      "date": "2026-03-19T14:28:33.103350",
+      "algorithm": "hdbscan",
+      "params": {
+        "min_cluster_size": 500,
+        "min_samples": 10
+      },
+      "n_clusters": 21,
+      "n_noise": 26818,
+      "noise_pct": 0.1786,
+      "features_used": [
+        "surface_bat",
+        "hauteur_mean",
+        "hauteur_max",
+        "nb_niveaux",
+        "annee_construction",
+        "nb_logements",
+        "usage_principal_enc",
+        "usage_foncier_enc",
+        "mat_murs_enc",
+        "nature_bdtopo_enc",
+        "usage_bdtopo_enc"
+      ],
+      "n_features": 11,
+      "n_samples": 150119,
+      "metrics": {
+        "silhouette": 0.0826,
+        "davies_bouldin": 2.1312,
+        "calinski_harabasz": 13982.3
+      },
+      "data_sources": [
+        "bdnb"
+      ],
+      "notes": "HDBSCAN BEST (full) v2 — résidentiel individuel (nb_log<4, usage=Résidentiel individuel) mcs=500 ms=10"
     }
   ]
 }
