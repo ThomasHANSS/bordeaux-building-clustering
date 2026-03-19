@@ -1,0 +1,36 @@
+# Données volumineuses
+data/raw/
+data/processed/
+*.parquet
+*.geoparquet
+*.csv
+!data/geo/*.geojson
+
+# Sorties
+outputs/maps/*.html
+outputs/figures/*.png
+outputs/*.log
+outputs/*.joblib
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+dist/
+build/
+.eggs/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Environnement
+.env
+.venv/
+venv/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo

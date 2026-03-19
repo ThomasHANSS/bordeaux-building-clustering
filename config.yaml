@@ -1,0 +1,140 @@
+project:
+  name: "bordeaux-building-clustering"
+  crs_compute: "EPSG:2154"
+  crs_display: "EPSG:4326"
+
+zone:
+  nom: "Bordeaux Métropole"
+  codes_insee:
+    - "33003"
+    - "33009"
+    - "33032"
+    - "33039"
+    - "33056"
+    - "33063"
+    - "33065"
+    - "33069"
+    - "33075"
+    - "33096"
+    - "33119"
+    - "33162"
+    - "33167"
+    - "33192"
+    - "33200"
+    - "33249"
+    - "33273"
+    - "33281"
+    - "33312"
+    - "33318"
+    - "33376"
+    - "33434"
+    - "33449"
+    - "33487"
+    - "33519"
+    - "33522"
+    - "33550"
+
+data:
+  gpkg_path: "data/raw/bdnb_33/gpkg/bdnb.gpkg"
+  layer: "batiment_groupe_compile"
+
+spatial:
+  chunk_size_read: 50000
+  chunk_size_sjoin: 10000
+  use_chunked_above: 100000
+  simplify_tolerance: 0.5
+  min_geometry_area: 1.0
+  default_crs_fallback: "EPSG:4326"
+
+features:
+  column_mapping:
+    surface_bat: "s_geom_groupe"
+    hauteur_mean: "bdtopo_bat_hauteur_mean"
+    hauteur_max: "bdtopo_bat_max_hauteur"
+    nb_niveaux: "ffo_bat_nb_niveau"
+    annee_construction: "ffo_bat_annee_construction"
+    nb_logements: "ffo_bat_nb_log"
+    usage_principal: "usage_principal_bdnb_open"
+    usage_foncier: "ffo_bat_usage_niveau_1_txt"
+    mat_murs: "ffo_bat_mat_mur_txt"
+    mat_toit: "ffo_bat_mat_toit_txt"
+    nature_bdtopo: "bdtopo_bat_l_nature"
+    usage_bdtopo: "bdtopo_bat_l_usage_1"
+    alea_argile: "alea_argile"
+    alea_radon: "alea_radon"
+
+  numerical:
+    - surface_bat
+    - hauteur_mean
+    - hauteur_max
+    - nb_niveaux
+    - annee_construction
+    - nb_logements
+
+  categorical:
+    - usage_principal
+    - usage_foncier
+    - mat_murs
+    - mat_toit
+    - nature_bdtopo
+    - usage_bdtopo
+    - alea_argile
+    - alea_radon
+
+  # Features optionnelles (< 70% mais intéressantes en enrichissement)
+  optional:
+    - dpe_mix_arrete_classe_bilan_dpe
+    - dpe_mix_arrete_conso_5_usages_ep_m2
+    - dvf_open_prix_m2_local_median
+    - dvf_open_nb_mutation
+
+  min_completeness: 0.70
+  correlation_threshold: 0.85
+  vif_threshold: 10
+
+  encoding:
+    onehot_max_cardinality: 8
+
+  reduction:
+    enabled: false
+    method: "pca"
+    n_components: 10
+
+  min_surface: 20
+  max_surface: 50000
+
+clustering:
+  random_state: 42
+  target_k: 15
+  k_range: [8, 25]
+  algorithms:
+    - name: "kmeans"
+      params: {}
+    - name: "hdbscan"
+      params:
+        min_cluster_size: 100
+        min_samples: 50
+    - name: "gaussian_mixture"
+      params:
+        covariance_type: "full"
+    - name: "agglomerative"
+      params:
+        linkage: "ward"
+
+evaluation:
+  metrics:
+    - "silhouette"
+    - "davies_bouldin"
+    - "calinski_harabasz"
+  stability_n_bootstrap: 50
+  spatial_autocorrelation: true
+
+pipeline:
+  intermediate_file: "data/processed/features_ready.geoparquet"
+  results_file: "data/processed/clustered.geoparquet"
+  scaler_file: "outputs/scaler.joblib"
+  experiments_file: "outputs/experiments.json"
+
+logging:
+  level: "INFO"
+  file: "outputs/project.log"
