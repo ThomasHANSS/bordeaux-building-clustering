@@ -1,0 +1,255 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Clustering bâtiments — Bordeaux Métropole</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+html, body { height: 100%; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+#map { position: absolute; top: 0; left: 0; right: 0; bottom: 0; z-index: 1; }
+
+#panel {
+    position: absolute; top: 10px; right: 10px; z-index: 1000;
+    background: white; border-radius: 8px; box-shadow: 0 2px 12px rgba(0,0,0,0.3);
+    width: 320px; max-height: calc(100vh - 20px); overflow-y: auto;
+    font-size: 13px;
+}
+#panel-header {
+    padding: 12px 16px; background: #1a1a2e; color: white;
+    border-radius: 8px 8px 0 0; font-weight: bold; font-size: 15px;
+    cursor: pointer; user-select: none; display: flex; justify-content: space-between;
+}
+#panel-header:hover { background: #16213e; }
+#panel-body { padding: 0; }
+.section { padding: 10px 14px; border-bottom: 1px solid #eee; }
+.section-title { font-weight: 600; font-size: 12px; color: #666; text-transform: uppercase;
+    letter-spacing: 0.5px; margin-bottom: 8px; }
+
+.basemap-option { display: flex; align-items: center; padding: 3px 0; cursor: pointer; }
+.basemap-option input { margin-right: 8px; }
+.basemap-option label { cursor: pointer; }
+
+.cluster-option { display: flex; align-items: center; padding: 2px 0; cursor: pointer; }
+.cluster-option input { margin-right: 6px; flex-shrink: 0; }
+.cluster-swatch {
+    width: 14px; height: 14px; border-radius: 3px; margin-right: 6px;
+    border: 1px solid #333; flex-shrink: 0;
+}
+.cluster-label { font-size: 12px; line-height: 1.3; }
+.cluster-count { color: #999; font-size: 11px; }
+
+.btn-row { display: flex; gap: 6px; margin-top: 8px; }
+.btn { padding: 4px 10px; border: 1px solid #ccc; border-radius: 4px;
+    background: #f8f8f8; cursor: pointer; font-size: 11px; }
+.btn:hover { background: #e8e8e8; }
+
+#loading {
+    position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+    z-index: 2000; background: rgba(0,0,0,0.8); color: white; padding: 20px 30px;
+    border-radius: 8px; font-size: 16px;
+}
+#progress { color: #42d4f4; }
+</style>
+</head>
+<body>
+<div id="map"></div>
+<div id="loading">Chargement... <span id="progress">0/15</span></div>
+
+<div id="panel">
+    <div id="panel-header">
+        <span>Clusters — Bordeaux Métropole</span>
+        <span id="toggle-icon">&#9660;</span>
+    </div>
+    <div id="panel-body">
+        <div class="section">
+            <div class="section-title">Fond de carte</div>
+            <div id="basemap-controls"></div>
+        </div>
+        <div class="section">
+            <div class="section-title">Clusters (234 116 bâtiments)</div>
+            <div class="btn-row">
+                <button class="btn" onclick="toggleAll(true)">Tout afficher</button>
+                <button class="btn" onclick="toggleAll(false)">Tout masquer</button>
+            </div>
+            <div id="cluster-controls" style="margin-top:8px;"></div>
+        </div>
+    </div>
+</div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+const CLUSTERS = {"0": {"name": "Pavillon plain-pied (157m², 4m)", "color": "#e6194b", "count": 10890, "file": "data/cluster_0.geojson"}, "1": {"name": "Petit bâti / annexes (40m²)", "color": "#3cb44b", "count": 46823, "file": "data/cluster_1.geojson"}, "2": {"name": "Individuel dense R+1 (101m²)", "color": "#ffe119", "count": 30495, "file": "data/cluster_2.geojson"}, "3": {"name": "Pavillon standard (133m², 4m)", "color": "#4363d8", "count": 56137, "file": "data/cluster_3.geojson"}, "4": {"name": "Tertiaire moyen (1132m²)", "color": "#f58231", "count": 1278, "file": "data/cluster_4.geojson"}, "5": {"name": "Collectif moyen (820m², 11m)", "color": "#911eb4", "count": 2830, "file": "data/cluster_5.geojson"}, "6": {"name": "Grand collectif (3226m², 13m)", "color": "#42d4f4", "count": 222, "file": "data/cluster_6.geojson"}, "7": {"name": "Collectif haut R+4 (135m², 15m)", "color": "#f032e6", "count": 6449, "file": "data/cluster_7.geojson"}, "8": {"name": "Individuel R+2 (99m², 9m)", "color": "#bfef45", "count": 15571, "file": "data/cluster_8.geojson"}, "9": {"name": "Individuel compact (94m², 5m)", "color": "#fabed4", "count": 27906, "file": "data/cluster_9.geojson"}, "10": {"name": "Grand équipement (4794m²)", "color": "#469990", "count": 720, "file": "data/cluster_10.geojson"}, "11": {"name": "Individuel type (101m², 5m)", "color": "#dcbeff", "count": 25335, "file": "data/cluster_11.geojson"}, "12": {"name": "Tour / IGH (704m², 23m)", "color": "#9A6324", "count": 349, "file": "data/cluster_12.geojson"}, "13": {"name": "Grande maison (282m², 4m)", "color": "#800000", "count": 1211, "file": "data/cluster_13.geojson"}, "14": {"name": "Tertiaire courant (409m², 7m)", "color": "#aaffc3", "count": 7900, "file": "data/cluster_14.geojson"}};
+
+// ── Map ──
+const map = L.map('map', { center: [44.8378, -0.5792], zoom: 12, zoomControl: true });
+
+// ── Basemaps ──
+const basemaps = {
+    'Google Satellite': L.tileLayer('https://mt1.google.com/vt/lyrs=s&x={x}&y={y}&z={z}', {
+        maxZoom: 21, attribution: '&copy; Google'
+    }),
+    'Google Hybrid': L.tileLayer('https://mt1.google.com/vt/lyrs=y&x={x}&y={y}&z={z}', {
+        maxZoom: 21, attribution: '&copy; Google'
+    }),
+    'OpenStreetMap': L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        maxZoom: 19, attribution: '&copy; OpenStreetMap contributors'
+    }),
+    'CartoDB Positron': L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}@2x.png', {
+        maxZoom: 20, attribution: '&copy; CartoDB', subdomains: 'abcd'
+    })
+};
+let currentBasemap = basemaps['Google Hybrid'];
+currentBasemap.addTo(map);
+
+// ── Basemap controls ──
+const bmContainer = document.getElementById('basemap-controls');
+Object.keys(basemaps).forEach((name, i) => {
+    const div = document.createElement('div');
+    div.className = 'basemap-option';
+    const checked = name === 'Google Hybrid' ? 'checked' : '';
+    div.innerHTML = `<input type="radio" name="basemap" id="bm_${i}" value="${name}" ${checked}>
+        <label for="bm_${i}">${name}</label>`;
+    div.querySelector('input').addEventListener('change', () => {
+        map.removeLayer(currentBasemap);
+        currentBasemap = basemaps[name];
+        currentBasemap.addTo(map);
+    });
+    bmContainer.appendChild(div);
+});
+
+// ── Cluster layers ──
+const clusterLayers = {};
+
+function formatPopup(props, clId) {
+    const meta = CLUSTERS[clId];
+    let html = `<div style="font-family:sans-serif;font-size:13px;min-width:200px;">`;
+    html += `<div style="background:${meta.color};color:white;padding:6px 10px;margin:-1px -1px 8px;border-radius:4px 4px 0 0;font-weight:bold;">`;
+    html += `Cluster ${clId} — ${meta.name}</div>`;
+    html += `<table style="width:100%;border-collapse:collapse;">`;
+
+    const rows = [
+        ['Surface', props.surface_bat != null ? props.surface_bat.toFixed(0) + ' m²' : '—'],
+        ['Hauteur', props.hauteur_mean != null ? props.hauteur_mean.toFixed(1) + ' m' : '—'],
+        ['Niveaux', props.nb_niveaux != null ? Math.round(props.nb_niveaux) : '—'],
+        ['Année', props.annee_construction != null && props.annee_construction > 0 ? Math.round(props.annee_construction) : '—'],
+        ['Usage', props.usage_principal || '—'],
+        ['Matériau murs', props.mat_murs || '—'],
+    ];
+    if (props.libelle_adr_principale_ban) {
+        rows.unshift(['Adresse', props.libelle_adr_principale_ban]);
+    }
+    rows.forEach(([k, v]) => {
+        html += `<tr><td style="padding:2px 6px;color:#666;white-space:nowrap;">${k}</td>
+                     <td style="padding:2px 6px;font-weight:500;">${v}</td></tr>`;
+    });
+    html += '</table></div>';
+    return html;
+}
+
+function styleCluster(color) {
+    return {
+        fillColor: color,
+        color: '#000000',
+        weight: 0.8,
+        fillOpacity: 0.6,
+    };
+}
+
+// ── Load clusters ──
+let loaded = 0;
+const total = Object.keys(CLUSTERS).length;
+const progressEl = document.getElementById('progress');
+const loadingEl = document.getElementById('loading');
+
+async function loadCluster(clId) {
+    const meta = CLUSTERS[clId];
+    try {
+        const resp = await fetch(meta.file);
+        const geojson = await resp.json();
+
+        const layer = L.geoJSON(geojson, {
+            style: () => styleCluster(meta.color),
+            onEachFeature: (feature, layer) => {
+                layer.bindPopup(() => formatPopup(feature.properties, clId), { maxWidth: 300 });
+            }
+        });
+
+        clusterLayers[clId] = layer;
+        layer.addTo(map);
+    } catch (e) {
+        console.error(`Erreur cluster ${clId}:`, e);
+    }
+
+    loaded++;
+    progressEl.textContent = `${loaded}/${total}`;
+    if (loaded >= total) {
+        loadingEl.style.display = 'none';
+    }
+}
+
+// Load clusters sequentially to avoid memory spikes
+async function loadAll() {
+    const ids = Object.keys(CLUSTERS).sort((a, b) => a - b);
+    // Load 3 at a time
+    for (let i = 0; i < ids.length; i += 3) {
+        const batch = ids.slice(i, i + 3);
+        await Promise.all(batch.map(id => loadCluster(id)));
+    }
+}
+
+// ── Cluster controls ──
+const ccContainer = document.getElementById('cluster-controls');
+Object.keys(CLUSTERS).sort((a, b) => a - b).forEach(clId => {
+    const meta = CLUSTERS[clId];
+    const div = document.createElement('div');
+    div.className = 'cluster-option';
+    div.innerHTML = `
+        <input type="checkbox" id="cl_${clId}" checked>
+        <div class="cluster-swatch" style="background:${meta.color};"></div>
+        <div>
+            <span class="cluster-label">${clId}: ${meta.name}</span><br>
+            <span class="cluster-count">${meta.count.toLocaleString('fr-FR')} bâtiments</span>
+        </div>`;
+    div.querySelector('input').addEventListener('change', (e) => {
+        if (clusterLayers[clId]) {
+            if (e.target.checked) {
+                map.addLayer(clusterLayers[clId]);
+            } else {
+                map.removeLayer(clusterLayers[clId]);
+            }
+        }
+    });
+    ccContainer.appendChild(div);
+});
+
+function toggleAll(show) {
+    Object.keys(CLUSTERS).forEach(clId => {
+        const cb = document.getElementById('cl_' + clId);
+        if (cb) cb.checked = show;
+        if (clusterLayers[clId]) {
+            if (show) map.addLayer(clusterLayers[clId]);
+            else map.removeLayer(clusterLayers[clId]);
+        }
+    });
+}
+
+// ── Panel toggle ──
+const panelBody = document.getElementById('panel-body');
+const toggleIcon = document.getElementById('toggle-icon');
+document.getElementById('panel-header').addEventListener('click', () => {
+    if (panelBody.style.display === 'none') {
+        panelBody.style.display = 'block';
+        toggleIcon.innerHTML = '&#9660;';
+    } else {
+        panelBody.style.display = 'none';
+        toggleIcon.innerHTML = '&#9654;';
+    }
+});
+
+// Start loading
+loadAll();
+</script>
+</body>
+</html>
