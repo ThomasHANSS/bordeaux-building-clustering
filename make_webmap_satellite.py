@@ -1,8 +1,10 @@
-"""Génère la carte web interactive Leaflet avec fonds satellite.
+"""Génère la carte web interactive Leaflet multi-clustering avec onglets.
 
-Données : clustering v3 (résidentiel individuel, nb_logements < 4, 150k bâtiments).
-Exporte un GeoJSON par cluster (géométries simplifiées 0.5m Lambert-93)
-puis crée une page HTML Leaflet Canvas dans outputs/maps/webmap_satellite/.
+Onglets :
+- v3 : résidentiel individuel (150k bâtiments, KMeans k=15)
+- v4 : bâti récent >=2016 (7k bâtiments, KMeans k=10)
+
+Exporte un GeoJSON par cluster par version, puis crée une page HTML Leaflet.
 """
 
 import geopandas as gpd
@@ -15,46 +17,53 @@ import numpy as np
 logging.basicConfig(level=logging.INFO, format="%(asctime)s | %(message)s")
 logger = logging.getLogger()
 
-DATA_PATH = "data/processed/clustered_petit_residentiel.geoparquet"
-LABEL_COL = "km_label"
 OUTPUT_DIR = "outputs/maps/webmap_satellite"
-SIMPLIFY_TOLERANCE = 0.5  # mètres en Lambert-93 (0.5m préserve la forme)
+SIMPLIFY_TOLERANCE = 0.5
 
 COLORS = [
     "#e6194b", "#3cb44b", "#ffe119", "#4363d8", "#f58231",
     "#911eb4", "#42d4f4", "#f032e6", "#bfef45", "#fabed4",
     "#469990", "#dcbeff", "#9A6324", "#800000", "#aaffc3",
+    "#000075", "#a9a9a9", "#ffd8b1", "#fffac8", "#e6beff",
 ]
 
-# Colonnes pour les popups
 POPUP_COLS = [
     "surface_bat", "hauteur_mean", "nb_niveaux",
     "annee_construction", "usage_principal", "mat_murs",
 ]
 
+VERSIONS = {
+    "v3": {
+        "title": "Clustering v3 — Résidentiel individuel",
+        "subtitle": "150k bâtiments, KMeans k=15",
+        "data_path": "data/processed/clustered_petit_residentiel.geoparquet",
+        "label_col": "km_label",
+    },
+    "v4": {
+        "title": "Clustering v4 — Bâti récent (≤10 ans)",
+        "subtitle": "7k bâtiments (≥2016), KMeans k=10",
+        "data_path": "data/processed/clustered_recent.geoparquet",
+        "label_col": "v4_label",
+    },
+}
 
-def compute_cluster_names(gdf: gpd.GeoDataFrame) -> dict[int, str]:
+
+def compute_cluster_names(gdf: gpd.GeoDataFrame, label_col: str) -> dict[int, str]:
     """Nomme chaque cluster selon son profil médian."""
     names = {}
-    for cl in sorted(gdf[LABEL_COL].unique()):
-        sub = gdf[gdf[LABEL_COL] == cl]
+    for cl in sorted(gdf[label_col].unique()):
+        sub = gdf[gdf[label_col] == cl]
         s = sub["surface_bat"].median()
         h = sub["hauteur_mean"].median()
         a = sub["annee_construction"].median()
         mat = sub["mat_murs"].mode()
         m = str(mat.iloc[0]) if len(mat) > 0 else ""
 
-        # Période
-        if a < 1945:
-            per = "ancien"
-        elif a < 1975:
-            per = "1945-75"
-        elif a < 2000:
-            per = "fin XXe"
-        else:
-            per = "récent"
+        if a < 1945: per = "ancien"
+        elif a < 1975: per = "1945-75"
+        elif a < 2000: per = "fin XXe"
+        else: per = str(int(a))
 
-        # Matériau court
         ml = m.lower()
         mat_s = ""
         if "pierre" in ml: mat_s = "pierre"
@@ -63,38 +72,40 @@ def compute_cluster_names(gdf: gpd.GeoDataFrame) -> dict[int, str]:
         elif "parpaing" in ml or "agglo" in ml: mat_s = "parpaing"
         elif "bois" in ml: mat_s = "bois"
 
-        # Type
-        if s < 60:
-            typ = "Petit bâti"
-        elif h <= 4:
-            typ = "Grande maison" if s > 200 else "Pavillon"
-        elif h <= 7:
-            typ = "Maison R+1"
-        elif h <= 10:
-            typ = "Individuel dense R+2"
-        else:
-            typ = "Individuel haut"
+        if s < 60: typ = "Petit bâti"
+        elif h <= 4: typ = "Grande maison" if s > 200 else "Pavillon"
+        elif h <= 7: typ = "Maison R+1"
+        elif h <= 10: typ = "Individuel dense R+2"
+        else: typ = "Individuel haut"
 
         parts = [typ, f"{s:.0f}m²", f"{h:.0f}m", per]
         if mat_s:
             parts.append(mat_s)
         names[cl] = " / ".join(parts)
-
     return names
 
 
-def export_geojson_per_cluster(gdf: gpd.GeoDataFrame, names: dict) -> dict:
-    """Exporte un GeoJSON par cluster, retourne les métadonnées."""
-    # Colonnes utiles seulement
-    cols = [c for c in POPUP_COLS if c in gdf.columns] + [LABEL_COL, "geometry"]
+def export_version(version_key: str) -> tuple[dict, int]:
+    """Exporte les GeoJSON d'une version, retourne (cluster_meta, n_total)."""
+    cfg = VERSIONS[version_key]
+    logger.info("=== %s ===", cfg["title"])
+
+    gdf = gpd.read_parquet(cfg["data_path"])
+    label_col = cfg["label_col"]
+    n_total = len(gdf)
+    logger.info("  %d bâtiments", n_total)
+
+    names = compute_cluster_names(gdf, label_col)
+
+    # Ne garder que les colonnes utiles
+    cols = [c for c in POPUP_COLS if c in gdf.columns] + [label_col, "geometry"]
     gdf = gdf[cols].copy()
 
-    # Simplifier (0.5m en Lambert-93)
-    logger.info("  Simplification (tolérance=%.1fm)...", SIMPLIFY_TOLERANCE)
+    # Simplifier
+    logger.info("  Simplification (%.1fm)...", SIMPLIFY_TOLERANCE)
     gdf["geometry"] = gdf.geometry.simplify(SIMPLIFY_TOLERANCE)
 
-    # Reprojeter WGS84
-    logger.info("  Reprojection EPSG:4326...")
+    # Reprojeter
     gdf = gdf.to_crs("EPSG:4326")
 
     # Nettoyer NaN
@@ -105,28 +116,25 @@ def export_geojson_per_cluster(gdf: gpd.GeoDataFrame, names: dict) -> dict:
             gdf[col] = gdf[col].where(gdf[col].notna(), None)
         gdf[col] = gdf[col].replace({np.nan: None, "nan": None})
 
-    os.makedirs(os.path.join(OUTPUT_DIR, "data"), exist_ok=True)
+    data_dir = os.path.join(OUTPUT_DIR, "data")
+    os.makedirs(data_dir, exist_ok=True)
     cluster_meta = {}
 
-    for cl in sorted(gdf[LABEL_COL].unique()):
-        sub = gdf[gdf[LABEL_COL] == cl].copy()
-        # Drop label col from properties (already known)
-        sub = sub.drop(columns=[LABEL_COL])
+    def round_coords(coords):
+        if isinstance(coords[0], (list, tuple)):
+            return [round_coords(c) for c in coords]
+        return [round(coords[0], 6), round(coords[1], 6)]
+
+    for cl in sorted(gdf[label_col].unique()):
+        sub = gdf[gdf[label_col] == cl].drop(columns=[label_col]).copy()
         n = len(sub)
         name = names.get(cl, f"Cluster {cl}")
         color = COLORS[cl % len(COLORS)]
 
-        fname = f"cluster_{cl}.geojson"
-        fpath = os.path.join(OUTPUT_DIR, "data", fname)
+        fname = f"{version_key}_cluster_{cl}.geojson"
+        fpath = os.path.join(data_dir, fname)
 
         geojson = json.loads(sub.to_json())
-
-        # Arrondir les coordonnées à 6 décimales
-        def round_coords(coords):
-            if isinstance(coords[0], (list, tuple)):
-                return [round_coords(c) for c in coords]
-            return [round(coords[0], 6), round(coords[1], 6)]
-
         for feature in geojson["features"]:
             geom = feature["geometry"]
             if geom and "coordinates" in geom:
@@ -136,27 +144,25 @@ def export_geojson_per_cluster(gdf: gpd.GeoDataFrame, names: dict) -> dict:
             json.dump(geojson, f, separators=(",", ":"))
 
         fsize = os.path.getsize(fpath) / 1e6
-        logger.info("  Cluster %2d : %6d bât → %s (%.1f MB)", cl, n, fname, fsize)
+        logger.info("  Cluster %2d : %5d bât → %s (%.1f MB)", cl, n, fname, fsize)
+        cluster_meta[int(cl)] = {"name": name, "color": color, "count": n, "file": f"data/{fname}"}
 
-        cluster_meta[cl] = {"name": name, "color": color, "count": n, "file": f"data/{fname}"}
+    del gdf
+    gc.collect()
+    return cluster_meta, n_total
 
-    return cluster_meta
 
+def generate_html(all_versions: dict) -> str:
+    """Génère le HTML Leaflet avec onglets multi-version."""
 
-def generate_html(cluster_meta: dict, n_total: int) -> str:
-    """Génère le fichier HTML Leaflet avec renderer Canvas."""
-
-    clusters_js = json.dumps(
-        {str(k): v for k, v in sorted(cluster_meta.items())},
-        ensure_ascii=False,
-    )
+    versions_js = json.dumps(all_versions, ensure_ascii=False)
 
     html = f"""<!DOCTYPE html>
 <html lang="fr">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Clustering résidentiel individuel — Bordeaux Métropole</title>
+<title>Clustering bâtiments — Bordeaux Métropole</title>
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
 <style>
 * {{ margin: 0; padding: 0; box-sizing: border-box; }}
@@ -166,12 +172,12 @@ html, body {{ height: 100%; font-family: -apple-system, BlinkMacSystemFont, "Seg
 #panel {{
     position: absolute; top: 10px; right: 10px; z-index: 1000;
     background: white; border-radius: 8px; box-shadow: 0 2px 12px rgba(0,0,0,0.3);
-    width: 330px; max-height: calc(100vh - 20px); overflow-y: auto;
+    width: 340px; max-height: calc(100vh - 20px); overflow-y: auto;
     font-size: 13px;
 }}
 #panel-header {{
     position: sticky; top: 0; z-index: 10;
-    padding: 12px 16px; background: #1a1a2e; color: white;
+    padding: 10px 16px; background: #1a1a2e; color: white;
     border-radius: 8px 8px 0 0; font-weight: bold; font-size: 14px;
     cursor: pointer; user-select: none; display: flex; justify-content: space-between;
 }}
@@ -180,6 +186,20 @@ html, body {{ height: 100%; font-family: -apple-system, BlinkMacSystemFont, "Seg
 .section {{ padding: 10px 14px; border-bottom: 1px solid #eee; }}
 .section-title {{ font-weight: 600; font-size: 11px; color: #888; text-transform: uppercase;
     letter-spacing: 0.5px; margin-bottom: 8px; }}
+
+/* Tabs */
+#tabs {{
+    display: flex; border-bottom: 2px solid #eee; background: #fafafa;
+}}
+.tab {{
+    flex: 1; padding: 10px 8px; text-align: center; cursor: pointer;
+    font-size: 12px; font-weight: 600; color: #666; border-bottom: 3px solid transparent;
+    transition: all 0.2s;
+}}
+.tab:hover {{ background: #f0f0f0; }}
+.tab.active {{ color: #1a1a2e; border-bottom-color: #4363d8; background: white; }}
+#version-subtitle {{ padding: 6px 14px; font-size: 11px; color: #888; background: #f8f8f8;
+    border-bottom: 1px solid #eee; }}
 
 .basemap-option {{ display: flex; align-items: center; padding: 3px 0; cursor: pointer; }}
 .basemap-option input {{ margin-right: 8px; cursor: pointer; }}
@@ -212,22 +232,24 @@ html, body {{ height: 100%; font-family: -apple-system, BlinkMacSystemFont, "Seg
 <body>
 <div id="map"></div>
 <div id="loading">
-    Chargement... <span id="progress">0/15</span>
+    Chargement... <span id="progress">0/0</span>
     <div id="load-bar"><div id="load-fill"></div></div>
 </div>
 
 <div id="panel">
     <div id="panel-header">
-        <span>Résidentiel individuel</span>
+        <span>Clustering — Bordeaux Métropole</span>
         <span id="toggle-icon">&#9660;</span>
     </div>
     <div id="panel-body">
+        <div id="tabs"></div>
+        <div id="version-subtitle"></div>
         <div class="section">
             <div class="section-title">Fond de carte</div>
             <div id="basemap-controls"></div>
         </div>
         <div class="section">
-            <div class="section-title">Clusters ({n_total:,} bâtiments)</div>
+            <div class="section-title" id="clusters-title">Clusters</div>
             <div class="btn-row">
                 <button class="btn" onclick="toggleAll(true)">Tout afficher</button>
                 <button class="btn" onclick="toggleAll(false)">Tout masquer</button>
@@ -239,16 +261,13 @@ html, body {{ height: 100%; font-family: -apple-system, BlinkMacSystemFont, "Seg
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script>
-const CLUSTERS = {clusters_js};
+const VERSIONS = {versions_js};
 
-// ── Map with Canvas renderer for performance ──
+// ── Map ──
 const canvasRenderer = L.canvas({{ padding: 0.5, tolerance: 5 }});
 const map = L.map('map', {{
-    center: [44.8378, -0.5792],
-    zoom: 12,
-    zoomControl: true,
-    preferCanvas: true,
-    renderer: canvasRenderer
+    center: [44.8378, -0.5792], zoom: 12,
+    preferCanvas: true, renderer: canvasRenderer
 }});
 
 // ── Basemaps ──
@@ -270,10 +289,8 @@ const basemaps = {{
 let currentBasemap = basemaps['Google Hybrid'];
 currentBasemap.addTo(map);
 
-// ── Basemap controls ──
 const bmContainer = document.getElementById('basemap-controls');
-const bmNames = Object.keys(basemaps);
-bmNames.forEach((name, i) => {{
+Object.keys(basemaps).forEach((name, i) => {{
     const div = document.createElement('div');
     div.className = 'basemap-option';
     const checked = name === 'Google Hybrid' ? 'checked' : '';
@@ -287,16 +304,18 @@ bmNames.forEach((name, i) => {{
     bmContainer.appendChild(div);
 }});
 
-// ── Cluster layers ──
-const clusterLayers = {{}};
+// ── State ──
+let activeVersion = null;
+const loadedLayers = {{}};  // {{ versionKey: {{ clId: L.geoJSON }} }}
+const loadedData = {{}};    // {{ versionKey: true }} — tracks if fully loaded
 
-function formatPopup(props, clId) {{
-    const meta = CLUSTERS[clId];
+// ── Popup ──
+function formatPopup(props, clId, vKey) {{
+    const meta = VERSIONS[vKey].clusters[clId];
     let html = `<div style="font-family:sans-serif;font-size:13px;min-width:200px;">`;
     html += `<div style="background:${{meta.color}};color:white;padding:6px 10px;margin:-1px -1px 8px;border-radius:4px 4px 0 0;font-weight:bold;">`;
     html += `Cluster ${{clId}} — ${{meta.name}}</div>`;
     html += `<table style="width:100%;border-collapse:collapse;">`;
-
     const rows = [
         ['Surface', props.surface_bat != null ? Number(props.surface_bat).toFixed(0) + ' m²' : '—'],
         ['Hauteur', props.hauteur_mean != null ? Number(props.hauteur_mean).toFixed(1) + ' m' : '—'],
@@ -313,86 +332,137 @@ function formatPopup(props, clId) {{
     return html;
 }}
 
-// ── Load clusters ──
-let loaded = 0;
-const total = Object.keys(CLUSTERS).length;
-const progressEl = document.getElementById('progress');
-const loadingEl = document.getElementById('loading');
-const loadFill = document.getElementById('load-fill');
+// ── Load a version ──
+async function loadVersion(vKey) {{
+    if (loadedData[vKey]) return;
 
-async function loadCluster(clId) {{
-    const meta = CLUSTERS[clId];
-    try {{
-        const resp = await fetch(meta.file);
-        const geojson = await resp.json();
+    const version = VERSIONS[vKey];
+    const clusters = version.clusters;
+    const ids = Object.keys(clusters).sort((a, b) => a - b);
+    const total = ids.length;
+    let loaded = 0;
 
-        const layer = L.geoJSON(geojson, {{
-            renderer: canvasRenderer,
-            style: () => ({{
-                fillColor: meta.color,
-                color: '#000000',
-                weight: 0.8,
-                fillOpacity: 1.0,
-            }}),
-            onEachFeature: (feature, layer) => {{
-                layer.bindPopup(() => formatPopup(feature.properties, clId), {{ maxWidth: 300 }});
-            }}
-        }});
+    const loadingEl = document.getElementById('loading');
+    const progressEl = document.getElementById('progress');
+    const loadFill = document.getElementById('load-fill');
+    loadingEl.style.display = 'block';
+    progressEl.textContent = `0/${{total}}`;
+    loadFill.style.width = '0%';
 
-        clusterLayers[clId] = layer;
-        layer.addTo(map);
-    }} catch (e) {{
-        console.error(`Erreur cluster ${{clId}}:`, e);
-    }}
+    loadedLayers[vKey] = {{}};
 
-    loaded++;
-    progressEl.textContent = `${{loaded}}/${{total}}`;
-    loadFill.style.width = `${{(loaded / total * 100).toFixed(0)}}%`;
-    if (loaded >= total) {{
-        setTimeout(() => {{ loadingEl.style.display = 'none'; }}, 400);
-    }}
-}}
-
-async function loadAll() {{
-    const ids = Object.keys(CLUSTERS).sort((a, b) => a - b);
     for (let i = 0; i < ids.length; i += 2) {{
         const batch = ids.slice(i, i + 2);
-        await Promise.all(batch.map(id => loadCluster(id)));
+        await Promise.all(batch.map(async (clId) => {{
+            const meta = clusters[clId];
+            try {{
+                const resp = await fetch(meta.file);
+                const geojson = await resp.json();
+                const layer = L.geoJSON(geojson, {{
+                    renderer: canvasRenderer,
+                    style: () => ({{
+                        fillColor: meta.color,
+                        color: '#000000',
+                        weight: 0.8,
+                        fillOpacity: 1.0,
+                    }}),
+                    onEachFeature: (feature, layer) => {{
+                        layer.bindPopup(() => formatPopup(feature.properties, clId, vKey), {{ maxWidth: 300 }});
+                    }}
+                }});
+                loadedLayers[vKey][clId] = layer;
+            }} catch (e) {{
+                console.error(`Erreur ${{vKey}} cluster ${{clId}}:`, e);
+            }}
+            loaded++;
+            progressEl.textContent = `${{loaded}}/${{total}}`;
+            loadFill.style.width = `${{(loaded / total * 100).toFixed(0)}}%`;
+        }}));
     }}
+
+    loadedData[vKey] = true;
+    setTimeout(() => {{ loadingEl.style.display = 'none'; }}, 300);
 }}
 
-// ── Cluster controls ──
-const ccContainer = document.getElementById('cluster-controls');
-Object.keys(CLUSTERS).sort((a, b) => a - b).forEach(clId => {{
-    const meta = CLUSTERS[clId];
-    const div = document.createElement('div');
-    div.className = 'cluster-option';
-    div.innerHTML = `
-        <input type="checkbox" id="cl_${{clId}}" checked>
-        <div class="cluster-swatch" style="background:${{meta.color}};"></div>
-        <div>
-            <span class="cluster-label">${{clId}}: ${{meta.name}}</span><br>
-            <span class="cluster-count">${{meta.count.toLocaleString('fr-FR')}} bât.</span>
-        </div>`;
-    div.querySelector('input').addEventListener('change', (e) => {{
-        if (clusterLayers[clId]) {{
-            if (e.target.checked) map.addLayer(clusterLayers[clId]);
-            else map.removeLayer(clusterLayers[clId]);
-        }}
+// ── Switch version ──
+async function switchVersion(vKey) {{
+    // Hide current layers
+    if (activeVersion && loadedLayers[activeVersion]) {{
+        Object.values(loadedLayers[activeVersion]).forEach(layer => map.removeLayer(layer));
+    }}
+
+    activeVersion = vKey;
+
+    // Update tabs
+    document.querySelectorAll('.tab').forEach(t => {{
+        t.classList.toggle('active', t.dataset.version === vKey);
     }});
-    ccContainer.appendChild(div);
-}});
+
+    // Update subtitle
+    document.getElementById('version-subtitle').textContent = VERSIONS[vKey].subtitle;
+
+    // Load if needed
+    await loadVersion(vKey);
+
+    // Show layers & rebuild controls
+    const clusters = VERSIONS[vKey].clusters;
+    const ids = Object.keys(clusters).sort((a, b) => a - b);
+    const n_total = ids.reduce((sum, id) => sum + clusters[id].count, 0);
+
+    document.getElementById('clusters-title').textContent =
+        `Clusters (${{n_total.toLocaleString('fr-FR')}} bâtiments)`;
+
+    const ccContainer = document.getElementById('cluster-controls');
+    ccContainer.innerHTML = '';
+
+    ids.forEach(clId => {{
+        const meta = clusters[clId];
+        const layer = loadedLayers[vKey][clId];
+        if (layer) layer.addTo(map);
+
+        const div = document.createElement('div');
+        div.className = 'cluster-option';
+        div.innerHTML = `
+            <input type="checkbox" id="cl_${{vKey}}_${{clId}}" checked>
+            <div class="cluster-swatch" style="background:${{meta.color}};"></div>
+            <div>
+                <span class="cluster-label">${{clId}}: ${{meta.name}}</span><br>
+                <span class="cluster-count">${{meta.count.toLocaleString('fr-FR')}} bât.</span>
+            </div>`;
+        div.querySelector('input').addEventListener('change', (e) => {{
+            if (layer) {{
+                if (e.target.checked) map.addLayer(layer);
+                else map.removeLayer(layer);
+            }}
+        }});
+        ccContainer.appendChild(div);
+    }});
+}}
 
 function toggleAll(show) {{
-    Object.keys(CLUSTERS).forEach(clId => {{
-        const cb = document.getElementById('cl_' + clId);
+    if (!activeVersion || !loadedLayers[activeVersion]) return;
+    const clusters = VERSIONS[activeVersion].clusters;
+    Object.keys(clusters).forEach(clId => {{
+        const cb = document.getElementById(`cl_${{activeVersion}}_${{clId}}`);
         if (cb) cb.checked = show;
-        if (clusterLayers[clId]) {{
-            if (show) map.addLayer(clusterLayers[clId]);
-            else map.removeLayer(clusterLayers[clId]);
+        const layer = loadedLayers[activeVersion][clId];
+        if (layer) {{
+            if (show) map.addLayer(layer);
+            else map.removeLayer(layer);
         }}
     }});
 }}
+
+// ── Build tabs ──
+const tabsContainer = document.getElementById('tabs');
+Object.keys(VERSIONS).forEach(vKey => {{
+    const tab = document.createElement('div');
+    tab.className = 'tab';
+    tab.dataset.version = vKey;
+    tab.textContent = VERSIONS[vKey].title;
+    tab.addEventListener('click', () => switchVersion(vKey));
+    tabsContainer.appendChild(tab);
+}});
 
 // ── Panel toggle ──
 const panelBody = document.getElementById('panel-body');
@@ -403,7 +473,8 @@ document.getElementById('panel-header').addEventListener('click', () => {{
     toggleIcon.innerHTML = hidden ? '&#9660;' : '&#9654;';
 }});
 
-loadAll();
+// ── Start with first version ──
+switchVersion(Object.keys(VERSIONS)[0]);
 </script>
 </body>
 </html>"""
@@ -411,32 +482,31 @@ loadAll();
     html_path = os.path.join(OUTPUT_DIR, "index.html")
     with open(html_path, "w") as f:
         f.write(html)
-
     logger.info("HTML : %s", html_path)
     return html_path
 
 
 def main() -> None:
-    """Point d'entrée."""
-    os.makedirs(OUTPUT_DIR, exist_ok=True)
+    """Export tous les GeoJSON + HTML multi-onglets."""
+    # Nettoyer les anciens GeoJSON
+    data_dir = os.path.join(OUTPUT_DIR, "data")
+    if os.path.exists(data_dir):
+        for f in os.listdir(data_dir):
+            if f.endswith(".geojson"):
+                os.remove(os.path.join(data_dir, f))
 
-    logger.info("Chargement %s ...", DATA_PATH)
-    gdf = gpd.read_parquet(DATA_PATH)
-    n_total = len(gdf)
-    logger.info("  %d bâtiments, CRS=%s", n_total, gdf.crs.to_epsg())
+    all_versions = {}
 
-    # Noms dynamiques
-    names = compute_cluster_names(gdf)
-    for cl, name in sorted(names.items()):
-        logger.info("  Cluster %2d : %s (%d)", cl, name, (gdf[LABEL_COL] == cl).sum())
+    for vkey, cfg in VERSIONS.items():
+        cluster_meta, n_total = export_version(vkey)
+        all_versions[vkey] = {
+            "title": cfg["title"],
+            "subtitle": cfg["subtitle"],
+            "n_total": n_total,
+            "clusters": cluster_meta,
+        }
 
-    # Export GeoJSON
-    cluster_meta = export_geojson_per_cluster(gdf, names)
-    del gdf
-    gc.collect()
-
-    # HTML
-    generate_html(cluster_meta, n_total)
+    generate_html(all_versions)
 
     total_size = sum(
         os.path.getsize(os.path.join(r, f))

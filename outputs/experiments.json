@@ -673,6 +673,41 @@
         "bdnb"
       ],
       "notes": "HDBSCAN BEST (full) v2 — résidentiel individuel (nb_log<4, usage=Résidentiel individuel) mcs=500 ms=10"
+    },
+    {
+      "id": "run_020",
+      "date": "2026-03-19T15:44:54.324368",
+      "algorithm": "kmeans",
+      "params": {
+        "n_clusters": 10
+      },
+      "n_clusters": 10,
+      "n_noise": 0,
+      "noise_pct": 0,
+      "features_used": [
+        "surface_bat",
+        "hauteur_mean",
+        "hauteur_max",
+        "nb_niveaux",
+        "annee_construction",
+        "nb_logements",
+        "usage_principal_enc",
+        "usage_foncier_enc",
+        "mat_murs_enc",
+        "nature_bdtopo_enc",
+        "usage_bdtopo_enc"
+      ],
+      "n_features": 11,
+      "n_samples": 7087,
+      "metrics": {
+        "silhouette": 0.2331,
+        "davies_bouldin": 1.1862,
+        "calinski_harabasz": 1371.6
+      },
+      "data_sources": [
+        "bdnb"
+      ],
+      "notes": "v4 — bâti récent (>=2016), résidentiel individuel, nb_log<4, KMeans k=10"
     }
   ]
 }
