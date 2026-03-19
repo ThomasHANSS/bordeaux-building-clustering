@@ -260,3 +260,18 @@ Complétude : ~25% (feature optionnelle, pas primaire).
 ### Scripts
 - Garder les scripts précédents (first_run.py, generate_report_v2.py)
 - Nommer les nouveaux : `clustering_run_v2.py`, `generate_report_v3.py`
+
+## Cartes HTML interactives — IMPORTANT
+- Ne JAMAIS mettre les 234k polygones dans une seule carte Folium/HTML
+- Générer des cartes par zone avec les VRAIS polygones (pas des centroïdes)
+- Simplifier les géométries avec `simplify(1.0)` avant export Folium (1m en Lambert-93)
+- Zones de cartes à générer :
+  - Métropole entière : simplifier + limiter à 30k polygones échantillonnés
+  - Centre Bordeaux : bbox [410000, 6424000, 416000, 6430000]
+  - Mériadeck : bbox [411000, 6425500, 413500, 6428000]
+  - Caudéran / Le Bouscat : bbox [408500, 6427000, 411500, 6430000]
+  - Bassins à flot : bbox [412000, 6428500, 414000, 6430500]
+- Chaque carte : polygones colorés par cluster avec popup info + légende avec noms
+- Reprojeter en EPSG:4326 avant export Folium
+- Utiliser folium.GeoJson (pas CircleMarker) pour afficher les polygones
+- Sauver dans `outputs/maps/` avec noms explicites
