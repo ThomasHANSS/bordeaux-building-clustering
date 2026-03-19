@@ -1,3 +1,319 @@
 {
-  "runs": []
+  "runs": [
+    {
+      "id": "run_001",
+      "date": "2026-03-19T11:13:16.974171",
+      "algorithm": "kmeans",
+      "params": {
+        "n_clusters": 15
+      },
+      "n_clusters": 15,
+      "n_noise": 0,
+      "noise_pct": 0,
+      "features_used": [
+        "surface_bat",
+        "hauteur_mean",
+        "hauteur_max",
+        "nb_niveaux",
+        "annee_construction",
+        "nb_logements",
+        "usage_principal_enc",
+        "usage_foncier_enc",
+        "mat_murs_enc",
+        "nature_bdtopo_enc",
+        "usage_bdtopo_enc"
+      ],
+      "n_features": 11,
+      "n_samples": 234116,
+      "metrics": {
+        "silhouette": 0.3628,
+        "davies_bouldin": 1.0689,
+        "calinski_harabasz": 52910.6
+      },
+      "data_sources": [
+        "bdnb"
+      ],
+      "notes": "Premier run — BDNB seule"
+    },
+    {
+      "id": "run_002",
+      "date": "2026-03-19T11:13:18.331875",
+      "algorithm": "gmm",
+      "params": {
+        "n_clusters": 15
+      },
+      "n_clusters": 15,
+      "n_noise": 0,
+      "noise_pct": 0,
+      "features_used": [
+        "surface_bat",
+        "hauteur_mean",
+        "hauteur_max",
+        "nb_niveaux",
+        "annee_construction",
+        "nb_logements",
+        "usage_principal_enc",
+        "usage_foncier_enc",
+        "mat_murs_enc",
+        "nature_bdtopo_enc",
+        "usage_bdtopo_enc"
+      ],
+      "n_features": 11,
+      "n_samples": 234116,
+      "metrics": {
+        "silhouette": 0.141,
+        "davies_bouldin": 4.0184,
+        "calinski_harabasz": 14605.0
+      },
+      "data_sources": [
+        "bdnb"
+      ],
+      "notes": "Premier run — BDNB seule"
+    },
+    {
+      "id": "run_003",
+      "date": "2026-03-19T11:13:19.475469",
+      "algorithm": "agglomerative",
+      "params": {
+        "n_clusters": 15
+      },
+      "n_clusters": 15,
+      "n_noise": 0,
+      "noise_pct": 0,
+      "features_used": [
+        "surface_bat",
+        "hauteur_mean",
+        "hauteur_max",
+        "nb_niveaux",
+        "annee_construction",
+        "nb_logements",
+        "usage_principal_enc",
+        "usage_foncier_enc",
+        "mat_murs_enc",
+        "nature_bdtopo_enc",
+        "usage_bdtopo_enc"
+      ],
+      "n_features": 11,
+      "n_samples": 234116,
+      "metrics": {
+        "silhouette": 0.3254,
+        "davies_bouldin": 1.1122,
+        "calinski_harabasz": 51126.0
+      },
+      "data_sources": [
+        "bdnb"
+      ],
+      "notes": "Premier run — BDNB seule"
+    },
+    {
+      "id": "run_004",
+      "date": "2026-03-19T11:15:35.208598",
+      "algorithm": "kmeans",
+      "params": {
+        "n_clusters": 15
+      },
+      "n_clusters": 15,
+      "n_noise": 0,
+      "noise_pct": 0,
+      "features_used": [
+        "surface_bat",
+        "hauteur_mean",
+        "hauteur_max",
+        "nb_niveaux",
+        "annee_construction",
+        "nb_logements",
+        "usage_principal_enc",
+        "usage_foncier_enc",
+        "mat_murs_enc",
+        "nature_bdtopo_enc",
+        "usage_bdtopo_enc"
+      ],
+      "n_features": 11,
+      "n_samples": 234116,
+      "metrics": {
+        "silhouette": 0.3553,
+        "davies_bouldin": 1.0689,
+        "calinski_harabasz": 52910.6
+      },
+      "data_sources": [
+        "bdnb"
+      ],
+      "notes": "Premier run — BDNB seule"
+    },
+    {
+      "id": "run_005",
+      "date": "2026-03-19T11:15:36.591591",
+      "algorithm": "gmm",
+      "params": {
+        "n_clusters": 15
+      },
+      "n_clusters": 15,
+      "n_noise": 0,
+      "noise_pct": 0,
+      "features_used": [
+        "surface_bat",
+        "hauteur_mean",
+        "hauteur_max",
+        "nb_niveaux",
+        "annee_construction",
+        "nb_logements",
+        "usage_principal_enc",
+        "usage_foncier_enc",
+        "mat_murs_enc",
+        "nature_bdtopo_enc",
+        "usage_bdtopo_enc"
+      ],
+      "n_features": 11,
+      "n_samples": 234116,
+      "metrics": {
+        "silhouette": 0.1243,
+        "davies_bouldin": 4.0184,
+        "calinski_harabasz": 14605.0
+      },
+      "data_sources": [
+        "bdnb"
+      ],
+      "notes": "Premier run — BDNB seule"
+    },
+    {
+      "id": "run_006",
+      "date": "2026-03-19T11:15:37.820321",
+      "algorithm": "agglomerative",
+      "params": {
+        "n_clusters": 15
+      },
+      "n_clusters": 15,
+      "n_noise": 0,
+      "noise_pct": 0,
+      "features_used": [
+        "surface_bat",
+        "hauteur_mean",
+        "hauteur_max",
+        "nb_niveaux",
+        "annee_construction",
+        "nb_logements",
+        "usage_principal_enc",
+        "usage_foncier_enc",
+        "mat_murs_enc",
+        "nature_bdtopo_enc",
+        "usage_bdtopo_enc"
+      ],
+      "n_features": 11,
+      "n_samples": 234116,
+      "metrics": {
+        "silhouette": 0.3233,
+        "davies_bouldin": 1.1122,
+        "calinski_harabasz": 51126.0
+      },
+      "data_sources": [
+        "bdnb"
+      ],
+      "notes": "Premier run — BDNB seule"
+    },
+    {
+      "id": "run_007",
+      "date": "2026-03-19T12:00:02.881277",
+      "algorithm": "kmeans",
+      "params": {
+        "n_clusters": 15
+      },
+      "n_clusters": 15,
+      "n_noise": 0,
+      "noise_pct": 0,
+      "features_used": [
+        "surface_bat",
+        "hauteur_mean",
+        "hauteur_max",
+        "nb_niveaux",
+        "annee_construction",
+        "nb_logements",
+        "usage_principal_enc",
+        "usage_foncier_enc",
+        "mat_murs_enc",
+        "nature_bdtopo_enc",
+        "usage_bdtopo_enc"
+      ],
+      "n_features": 11,
+      "n_samples": 234116,
+      "metrics": {
+        "silhouette": 0.3517,
+        "davies_bouldin": 1.0689,
+        "calinski_harabasz": 52910.6
+      },
+      "data_sources": [
+        "bdnb"
+      ],
+      "notes": "Premier run — BDNB seule"
+    },
+    {
+      "id": "run_008",
+      "date": "2026-03-19T12:00:04.140696",
+      "algorithm": "gmm",
+      "params": {
+        "n_clusters": 15
+      },
+      "n_clusters": 15,
+      "n_noise": 0,
+      "noise_pct": 0,
+      "features_used": [
+        "surface_bat",
+        "hauteur_mean",
+        "hauteur_max",
+        "nb_niveaux",
+        "annee_construction",
+        "nb_logements",
+        "usage_principal_enc",
+        "usage_foncier_enc",
+        "mat_murs_enc",
+        "nature_bdtopo_enc",
+        "usage_bdtopo_enc"
+      ],
+      "n_features": 11,
+      "n_samples": 234116,
+      "metrics": {
+        "silhouette": 0.1489,
+        "davies_bouldin": 4.0184,
+        "calinski_harabasz": 14605.0
+      },
+      "data_sources": [
+        "bdnb"
+      ],
+      "notes": "Premier run — BDNB seule"
+    },
+    {
+      "id": "run_009",
+      "date": "2026-03-19T12:00:05.254983",
+      "algorithm": "agglomerative",
+      "params": {
+        "n_clusters": 15
+      },
+      "n_clusters": 15,
+      "n_noise": 0,
+      "noise_pct": 0,
+      "features_used": [
+        "surface_bat",
+        "hauteur_mean",
+        "hauteur_max",
+        "nb_niveaux",
+        "annee_construction",
+        "nb_logements",
+        "usage_principal_enc",
+        "usage_foncier_enc",
+        "mat_murs_enc",
+        "nature_bdtopo_enc",
+        "usage_bdtopo_enc"
+      ],
+      "n_features": 11,
+      "n_samples": 234116,
+      "metrics": {
+        "silhouette": 0.3294,
+        "davies_bouldin": 1.1122,
+        "calinski_harabasz": 51126.0
+      },
+      "data_sources": [
+        "bdnb"
+      ],
+      "notes": "Premier run — BDNB seule"
+    }
+  ]
 }
