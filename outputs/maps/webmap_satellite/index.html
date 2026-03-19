@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Clustering bâtiments — Bordeaux Métropole</title>
+<title>Clustering résidentiel individuel — Bordeaux Métropole</title>
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
 <style>
 * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -13,32 +13,33 @@ html, body { height: 100%; font-family: -apple-system, BlinkMacSystemFont, "Sego
 #panel {
     position: absolute; top: 10px; right: 10px; z-index: 1000;
     background: white; border-radius: 8px; box-shadow: 0 2px 12px rgba(0,0,0,0.3);
-    width: 320px; max-height: calc(100vh - 20px); overflow-y: auto;
+    width: 330px; max-height: calc(100vh - 20px); overflow-y: auto;
     font-size: 13px;
 }
 #panel-header {
+    position: sticky; top: 0; z-index: 10;
     padding: 12px 16px; background: #1a1a2e; color: white;
-    border-radius: 8px 8px 0 0; font-weight: bold; font-size: 15px;
+    border-radius: 8px 8px 0 0; font-weight: bold; font-size: 14px;
     cursor: pointer; user-select: none; display: flex; justify-content: space-between;
 }
 #panel-header:hover { background: #16213e; }
 #panel-body { padding: 0; }
 .section { padding: 10px 14px; border-bottom: 1px solid #eee; }
-.section-title { font-weight: 600; font-size: 12px; color: #666; text-transform: uppercase;
+.section-title { font-weight: 600; font-size: 11px; color: #888; text-transform: uppercase;
     letter-spacing: 0.5px; margin-bottom: 8px; }
 
 .basemap-option { display: flex; align-items: center; padding: 3px 0; cursor: pointer; }
-.basemap-option input { margin-right: 8px; }
-.basemap-option label { cursor: pointer; }
+.basemap-option input { margin-right: 8px; cursor: pointer; }
+.basemap-option label { cursor: pointer; font-size: 12px; }
 
-.cluster-option { display: flex; align-items: center; padding: 2px 0; cursor: pointer; }
-.cluster-option input { margin-right: 6px; flex-shrink: 0; }
+.cluster-option { display: flex; align-items: center; padding: 3px 0; cursor: pointer; }
+.cluster-option input { margin-right: 6px; flex-shrink: 0; cursor: pointer; }
 .cluster-swatch {
     width: 14px; height: 14px; border-radius: 3px; margin-right: 6px;
     border: 1px solid #333; flex-shrink: 0;
 }
-.cluster-label { font-size: 12px; line-height: 1.3; }
-.cluster-count { color: #999; font-size: 11px; }
+.cluster-label { font-size: 11px; line-height: 1.3; }
+.cluster-count { color: #999; font-size: 10px; }
 
 .btn-row { display: flex; gap: 6px; margin-top: 8px; }
 .btn { padding: 4px 10px; border: 1px solid #ccc; border-radius: 4px;
@@ -47,19 +48,24 @@ html, body { height: 100%; font-family: -apple-system, BlinkMacSystemFont, "Sego
 
 #loading {
     position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
-    z-index: 2000; background: rgba(0,0,0,0.8); color: white; padding: 20px 30px;
-    border-radius: 8px; font-size: 16px;
+    z-index: 2000; background: rgba(0,0,0,0.85); color: white; padding: 20px 30px;
+    border-radius: 10px; font-size: 16px; text-align: center;
 }
 #progress { color: #42d4f4; }
+#load-bar { width: 200px; height: 6px; background: #333; border-radius: 3px; margin-top: 10px; }
+#load-fill { height: 100%; width: 0%; background: #42d4f4; border-radius: 3px; transition: width 0.3s; }
 </style>
 </head>
 <body>
 <div id="map"></div>
-<div id="loading">Chargement... <span id="progress">0/15</span></div>
+<div id="loading">
+    Chargement... <span id="progress">0/15</span>
+    <div id="load-bar"><div id="load-fill"></div></div>
+</div>
 
 <div id="panel">
     <div id="panel-header">
-        <span>Clusters — Bordeaux Métropole</span>
+        <span>Résidentiel individuel</span>
         <span id="toggle-icon">&#9660;</span>
     </div>
     <div id="panel-body">
@@ -68,7 +74,7 @@ html, body { height: 100%; font-family: -apple-system, BlinkMacSystemFont, "Sego
             <div id="basemap-controls"></div>
         </div>
         <div class="section">
-            <div class="section-title">Clusters (234 116 bâtiments)</div>
+            <div class="section-title">Clusters (150,119 bâtiments)</div>
             <div class="btn-row">
                 <button class="btn" onclick="toggleAll(true)">Tout afficher</button>
                 <button class="btn" onclick="toggleAll(false)">Tout masquer</button>
@@ -80,10 +86,17 @@ html, body { height: 100%; font-family: -apple-system, BlinkMacSystemFont, "Sego
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script>
-const CLUSTERS = {"0": {"name": "Pavillon plain-pied (157m², 4m)", "color": "#e6194b", "count": 10890, "file": "data/cluster_0.geojson"}, "1": {"name": "Petit bâti / annexes (40m²)", "color": "#3cb44b", "count": 46823, "file": "data/cluster_1.geojson"}, "2": {"name": "Individuel dense R+1 (101m²)", "color": "#ffe119", "count": 30495, "file": "data/cluster_2.geojson"}, "3": {"name": "Pavillon standard (133m², 4m)", "color": "#4363d8", "count": 56137, "file": "data/cluster_3.geojson"}, "4": {"name": "Tertiaire moyen (1132m²)", "color": "#f58231", "count": 1278, "file": "data/cluster_4.geojson"}, "5": {"name": "Collectif moyen (820m², 11m)", "color": "#911eb4", "count": 2830, "file": "data/cluster_5.geojson"}, "6": {"name": "Grand collectif (3226m², 13m)", "color": "#42d4f4", "count": 222, "file": "data/cluster_6.geojson"}, "7": {"name": "Collectif haut R+4 (135m², 15m)", "color": "#f032e6", "count": 6449, "file": "data/cluster_7.geojson"}, "8": {"name": "Individuel R+2 (99m², 9m)", "color": "#bfef45", "count": 15571, "file": "data/cluster_8.geojson"}, "9": {"name": "Individuel compact (94m², 5m)", "color": "#fabed4", "count": 27906, "file": "data/cluster_9.geojson"}, "10": {"name": "Grand équipement (4794m²)", "color": "#469990", "count": 720, "file": "data/cluster_10.geojson"}, "11": {"name": "Individuel type (101m², 5m)", "color": "#dcbeff", "count": 25335, "file": "data/cluster_11.geojson"}, "12": {"name": "Tour / IGH (704m², 23m)", "color": "#9A6324", "count": 349, "file": "data/cluster_12.geojson"}, "13": {"name": "Grande maison (282m², 4m)", "color": "#800000", "count": 1211, "file": "data/cluster_13.geojson"}, "14": {"name": "Tertiaire courant (409m², 7m)", "color": "#aaffc3", "count": 7900, "file": "data/cluster_14.geojson"}};
+const CLUSTERS = {"0": {"name": "Pavillon / 116m² / 4m / fin XXe / brique", "color": "#e6194b", "count": 18165, "file": "data/cluster_0.geojson"}, "1": {"name": "Pavillon / 146m² / 4m / 1945-75 / brique", "color": "#3cb44b", "count": 7562, "file": "data/cluster_1.geojson"}, "2": {"name": "Pavillon / 136m² / 4m / fin XXe / brique", "color": "#ffe119", "count": 43279, "file": "data/cluster_2.geojson"}, "3": {"name": "Maison R+1 / 85m² / 7m / ancien / pierre", "color": "#4363d8", "count": 12560, "file": "data/cluster_3.geojson"}, "4": {"name": "Maison R+1 / 498m² / 5m / ancien / brique", "color": "#f58231", "count": 66, "file": "data/cluster_4.geojson"}, "5": {"name": "Pavillon / 111m² / 4m / 1945-75 / parpaing", "color": "#911eb4", "count": 13169, "file": "data/cluster_5.geojson"}, "6": {"name": "Grande maison / 239m² / 4m / 1945-75", "color": "#42d4f4", "count": 101, "file": "data/cluster_6.geojson"}, "7": {"name": "Maison R+1 / 232m² / 6m / ancien", "color": "#f032e6", "count": 33, "file": "data/cluster_7.geojson"}, "8": {"name": "Maison R+1 / 159m² / 5m / 1945-75 / brique", "color": "#bfef45", "count": 3955, "file": "data/cluster_8.geojson"}, "9": {"name": "Maison R+1 / 92m² / 5m / ancien / pierre", "color": "#fabed4", "count": 18073, "file": "data/cluster_9.geojson"}, "10": {"name": "Maison R+1 / 82m² / 6m / 1945-75 / parpaing", "color": "#469990", "count": 10888, "file": "data/cluster_10.geojson"}, "11": {"name": "Grande maison / 217m² / 4m / 1945-75 / brique", "color": "#dcbeff", "count": 495, "file": "data/cluster_11.geojson"}, "12": {"name": "Maison R+1 / 94m² / 6m / fin XXe / brique", "color": "#9A6324", "count": 16935, "file": "data/cluster_12.geojson"}, "13": {"name": "Individuel dense R+2 / 96m² / 10m / ancien / pierre", "color": "#800000", "count": 4103, "file": "data/cluster_13.geojson"}, "14": {"name": "Maison R+1 / 230m² / 5m / fin XXe / brique", "color": "#aaffc3", "count": 735, "file": "data/cluster_14.geojson"}};
 
-// ── Map ──
-const map = L.map('map', { center: [44.8378, -0.5792], zoom: 12, zoomControl: true });
+// ── Map with Canvas renderer for performance ──
+const canvasRenderer = L.canvas({ padding: 0.5, tolerance: 5 });
+const map = L.map('map', {
+    center: [44.8378, -0.5792],
+    zoom: 12,
+    zoomControl: true,
+    preferCanvas: true,
+    renderer: canvasRenderer
+});
 
 // ── Basemaps ──
 const basemaps = {
@@ -94,27 +107,29 @@ const basemaps = {
         maxZoom: 21, attribution: '&copy; Google'
     }),
     'OpenStreetMap': L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
-        maxZoom: 19, attribution: '&copy; OpenStreetMap contributors'
+        maxZoom: 19, attribution: '&copy; OpenStreetMap'
     }),
     'CartoDB Positron': L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}@2x.png', {
         maxZoom: 20, attribution: '&copy; CartoDB', subdomains: 'abcd'
-    })
+    }),
+    'Aucun (blanc)': null
 };
 let currentBasemap = basemaps['Google Hybrid'];
 currentBasemap.addTo(map);
 
 // ── Basemap controls ──
 const bmContainer = document.getElementById('basemap-controls');
-Object.keys(basemaps).forEach((name, i) => {
+const bmNames = Object.keys(basemaps);
+bmNames.forEach((name, i) => {
     const div = document.createElement('div');
     div.className = 'basemap-option';
     const checked = name === 'Google Hybrid' ? 'checked' : '';
     div.innerHTML = `<input type="radio" name="basemap" id="bm_${i}" value="${name}" ${checked}>
         <label for="bm_${i}">${name}</label>`;
     div.querySelector('input').addEventListener('change', () => {
-        map.removeLayer(currentBasemap);
+        if (currentBasemap) map.removeLayer(currentBasemap);
         currentBasemap = basemaps[name];
-        currentBasemap.addTo(map);
+        if (currentBasemap) currentBasemap.addTo(map);
     });
     bmContainer.appendChild(div);
 });
@@ -130,16 +145,13 @@ function formatPopup(props, clId) {
     html += `<table style="width:100%;border-collapse:collapse;">`;
 
     const rows = [
-        ['Surface', props.surface_bat != null ? props.surface_bat.toFixed(0) + ' m²' : '—'],
-        ['Hauteur', props.hauteur_mean != null ? props.hauteur_mean.toFixed(1) + ' m' : '—'],
+        ['Surface', props.surface_bat != null ? Number(props.surface_bat).toFixed(0) + ' m²' : '—'],
+        ['Hauteur', props.hauteur_mean != null ? Number(props.hauteur_mean).toFixed(1) + ' m' : '—'],
         ['Niveaux', props.nb_niveaux != null ? Math.round(props.nb_niveaux) : '—'],
         ['Année', props.annee_construction != null && props.annee_construction > 0 ? Math.round(props.annee_construction) : '—'],
         ['Usage', props.usage_principal || '—'],
         ['Matériau murs', props.mat_murs || '—'],
     ];
-    if (props.libelle_adr_principale_ban) {
-        rows.unshift(['Adresse', props.libelle_adr_principale_ban]);
-    }
     rows.forEach(([k, v]) => {
         html += `<tr><td style="padding:2px 6px;color:#666;white-space:nowrap;">${k}</td>
                      <td style="padding:2px 6px;font-weight:500;">${v}</td></tr>`;
@@ -148,20 +160,12 @@ function formatPopup(props, clId) {
     return html;
 }
 
-function styleCluster(color) {
-    return {
-        fillColor: color,
-        color: '#000000',
-        weight: 0.8,
-        fillOpacity: 0.6,
-    };
-}
-
 // ── Load clusters ──
 let loaded = 0;
 const total = Object.keys(CLUSTERS).length;
 const progressEl = document.getElementById('progress');
 const loadingEl = document.getElementById('loading');
+const loadFill = document.getElementById('load-fill');
 
 async function loadCluster(clId) {
     const meta = CLUSTERS[clId];
@@ -170,7 +174,13 @@ async function loadCluster(clId) {
         const geojson = await resp.json();
 
         const layer = L.geoJSON(geojson, {
-            style: () => styleCluster(meta.color),
+            renderer: canvasRenderer,
+            style: () => ({
+                fillColor: meta.color,
+                color: '#000000',
+                weight: 0.8,
+                fillOpacity: 0.6,
+            }),
             onEachFeature: (feature, layer) => {
                 layer.bindPopup(() => formatPopup(feature.properties, clId), { maxWidth: 300 });
             }
@@ -184,17 +194,16 @@ async function loadCluster(clId) {
 
     loaded++;
     progressEl.textContent = `${loaded}/${total}`;
+    loadFill.style.width = `${(loaded / total * 100).toFixed(0)}%`;
     if (loaded >= total) {
-        loadingEl.style.display = 'none';
+        setTimeout(() => { loadingEl.style.display = 'none'; }, 400);
     }
 }
 
-// Load clusters sequentially to avoid memory spikes
 async function loadAll() {
     const ids = Object.keys(CLUSTERS).sort((a, b) => a - b);
-    // Load 3 at a time
-    for (let i = 0; i < ids.length; i += 3) {
-        const batch = ids.slice(i, i + 3);
+    for (let i = 0; i < ids.length; i += 2) {
+        const batch = ids.slice(i, i + 2);
         await Promise.all(batch.map(id => loadCluster(id)));
     }
 }
@@ -210,15 +219,12 @@ Object.keys(CLUSTERS).sort((a, b) => a - b).forEach(clId => {
         <div class="cluster-swatch" style="background:${meta.color};"></div>
         <div>
             <span class="cluster-label">${clId}: ${meta.name}</span><br>
-            <span class="cluster-count">${meta.count.toLocaleString('fr-FR')} bâtiments</span>
+            <span class="cluster-count">${meta.count.toLocaleString('fr-FR')} bât.</span>
         </div>`;
     div.querySelector('input').addEventListener('change', (e) => {
         if (clusterLayers[clId]) {
-            if (e.target.checked) {
-                map.addLayer(clusterLayers[clId]);
-            } else {
-                map.removeLayer(clusterLayers[clId]);
-            }
+            if (e.target.checked) map.addLayer(clusterLayers[clId]);
+            else map.removeLayer(clusterLayers[clId]);
         }
     });
     ccContainer.appendChild(div);
@@ -239,16 +245,11 @@ function toggleAll(show) {
 const panelBody = document.getElementById('panel-body');
 const toggleIcon = document.getElementById('toggle-icon');
 document.getElementById('panel-header').addEventListener('click', () => {
-    if (panelBody.style.display === 'none') {
-        panelBody.style.display = 'block';
-        toggleIcon.innerHTML = '&#9660;';
-    } else {
-        panelBody.style.display = 'none';
-        toggleIcon.innerHTML = '&#9654;';
-    }
+    const hidden = panelBody.style.display === 'none';
+    panelBody.style.display = hidden ? 'block' : 'none';
+    toggleIcon.innerHTML = hidden ? '&#9660;' : '&#9654;';
 });
 
-// Start loading
 loadAll();
 </script>
 </body>
