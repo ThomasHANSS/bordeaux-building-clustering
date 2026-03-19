@@ -453,12 +453,12 @@ def build_parcellaire() -> tuple[gpd.GeoDataFrame, dict]:
 # ── Carte web interactive ──────────────────────────────────────────────────
 
 
-def export_parcelles_geojson(
+def prepare_geojson_data(
     parcelles: gpd.GeoDataFrame,
     version_key: str,
     cluster_names: dict[int, str],
-) -> tuple[dict, int]:
-    """Exporte les GeoJSON des parcelles par cluster pour une version.
+) -> tuple[dict, dict]:
+    """Prépare les GeoJSON des parcelles par cluster pour embedding inline.
 
     Parameters
     ----------
@@ -471,14 +471,13 @@ def export_parcelles_geojson(
 
     Returns
     -------
-    tuple[dict, int]
-        (cluster_meta, n_total parcelles classées)
+    tuple[dict, dict]
+        (cluster_meta, geojson_data_per_cluster)
     """
     cluster_col = f"cluster_{version_key}"
-    nom_col = f"cluster_nom_{version_key}"
     ces_col = f"ces_{version_key}"
 
-    logger.info("[%s] Export GeoJSON parcelles...", version_key)
+    logger.info("[%s] Préparation GeoJSON parcelles...", version_key)
 
     # Simplifier les géométries pour la carte
     gdf = parcelles.copy()
@@ -505,21 +504,18 @@ def export_parcelles_geojson(
         if gdf[col].dtype in ("float64", "float32"):
             gdf[col] = gdf[col].where(gdf[col].notna(), None)
 
-    data_dir = os.path.join(OUTPUT_DIR, "data")
-    os.makedirs(data_dir, exist_ok=True)
-
     cluster_meta = {}
+    geojson_data = {}
 
     def round_coords(coords):
         if isinstance(coords[0], (list, tuple)):
             return [round_coords(c) for c in coords]
-        return [round(coords[0], 6), round(coords[1], 6)]
+        return [round(coords[0], 5), round(coords[1], 5)]
 
-    # Ne pas exporter les parcelles non classées (-1) si elles sont trop nombreuses
-    # (elles alourdissent la carte sans apport visuel)
+    # Ne pas exporter les parcelles non classées (-1) si trop nombreuses
     n_unclassified = (gdf[cluster_col] == -1).sum()
     if n_unclassified > 50000:
-        logger.info("  %d parcelles non classées → omises de la carte (trop nombreuses)",
+        logger.info("  %d parcelles non classées → omises (trop nombreuses)",
                      n_unclassified)
         clusters_to_export = sorted([c for c in gdf[cluster_col].unique() if c >= 0])
     else:
@@ -531,12 +527,8 @@ def export_parcelles_geojson(
         name = cluster_names.get(cl, "Non classé")
         color = "#d3d3d3" if cl == -1 else COLORS[cl % len(COLORS)]
 
-        # Colonnes à exporter
         export_cols = [c for c in popup_cols if c in sub.columns] + ["geometry"]
         sub = sub[export_cols]
-
-        fname = f"{version_key}_parcelles_cluster_{cl}.geojson"
-        fpath = os.path.join(data_dir, fname)
 
         geojson = json.loads(sub.to_json())
         for feature in geojson["features"]:
@@ -544,39 +536,82 @@ def export_parcelles_geojson(
             if geom and "coordinates" in geom:
                 geom["coordinates"] = round_coords(geom["coordinates"])
 
-        with open(fpath, "w") as f:
-            json.dump(geojson, f, separators=(",", ":"))
+        geojson_str = json.dumps(geojson, separators=(",", ":"))
+        size_mb = len(geojson_str) / 1e6
+        logger.info("  Cluster %3d : %6d parcelles (%.1f MB)", cl, n, size_mb)
 
-        fsize = os.path.getsize(fpath) / 1e6
-        logger.info(
-            "  Cluster %3d : %6d parcelles → %s (%.1f MB)",
-            cl, n, fname, fsize,
-        )
         cluster_meta[int(cl)] = {
             "name": name,
             "color": color,
             "count": n,
-            "file": f"data/{fname}",
         }
+        geojson_data[int(cl)] = geojson_str
 
-    n_total = len(gdf[gdf[cluster_col] >= 0])
-    return cluster_meta, n_total
+    return cluster_meta, geojson_data
 
 
-def generate_html(all_versions: dict) -> str:
-    """Génère le HTML Leaflet avec onglets multi-version (parcelles).
+def generate_map(
+    parcelles: gpd.GeoDataFrame,
+    all_cluster_names: dict[str, dict[int, str]],
+) -> str:
+    """Génère la carte web interactive des parcelles (HTML autonome).
+
+    Les données GeoJSON sont embarquées directement dans le HTML
+    pour fonctionner sans serveur HTTP (protocole file://).
 
     Parameters
     ----------
-    all_versions : dict
-        Métadonnées par version (title, subtitle, clusters, etc.).
+    parcelles : gpd.GeoDataFrame
+        Parcelles enrichies avec clusters V3 et V4.
+    all_cluster_names : dict
+        Mapping version → {cluster_id → nom}.
 
     Returns
     -------
     str
-        Chemin du fichier HTML généré.
+        Chemin du fichier HTML.
     """
-    versions_js = json.dumps(all_versions, ensure_ascii=False)
+    os.makedirs(OUTPUT_DIR, exist_ok=True)
+
+    # Préparer les données pour chaque version
+    all_versions_meta = {}
+    all_geojson = {}  # {vkey: {cluster_id: geojson_str}}
+
+    for vkey, vcfg in VERSIONS.items():
+        cluster_names = all_cluster_names[vkey]
+        cluster_meta, geojson_data = prepare_geojson_data(
+            parcelles, vkey, cluster_names,
+        )
+        n_total = sum(m["count"] for m in cluster_meta.values() if m.get("count", 0))
+        all_versions_meta[vkey] = {
+            "title": vcfg["title"],
+            "subtitle": vcfg["subtitle"],
+            "n_total": n_total,
+            "pdf": vcfg.get("pdf", ""),
+            "clusters": cluster_meta,
+        }
+        all_geojson[vkey] = geojson_data
+
+    # Générer les blocs <script> avec les données GeoJSON embarquées
+    data_scripts = []
+    for vkey, clusters_data in all_geojson.items():
+        for cl_id, geojson_str in clusters_data.items():
+            var_name = f"GEOJSON_{vkey}_{cl_id}"
+            data_scripts.append(f"const {var_name} = {geojson_str};")
+
+    data_scripts_str = "\n".join(data_scripts)
+
+    # Construire le lookup JS : GEOJSON_DATA[vkey][clId]
+    lookup_lines = []
+    for vkey, clusters_data in all_geojson.items():
+        entries = ", ".join(
+            f'"{cl_id}": GEOJSON_{vkey}_{cl_id}'
+            for cl_id in sorted(clusters_data.keys())
+        )
+        lookup_lines.append(f'"{vkey}": {{{entries}}}')
+    lookup_js = "const GEOJSON_DATA = {" + ", ".join(lookup_lines) + "};"
+
+    versions_js = json.dumps(all_versions_meta, ensure_ascii=False)
 
     html = f"""<!DOCTYPE html>
 <html lang="fr">
@@ -646,17 +681,11 @@ html, body {{ height: 100%; font-family: -apple-system, BlinkMacSystemFont, "Seg
     z-index: 2000; background: rgba(0,0,0,0.85); color: white; padding: 20px 30px;
     border-radius: 10px; font-size: 16px; text-align: center;
 }}
-#progress {{ color: #42d4f4; }}
-#load-bar {{ width: 200px; height: 6px; background: #333; border-radius: 3px; margin-top: 10px; }}
-#load-fill {{ height: 100%; width: 0%; background: #42d4f4; border-radius: 3px; transition: width 0.3s; }}
 </style>
 </head>
 <body>
 <div id="map"></div>
-<div id="loading">
-    Chargement des parcelles... <span id="progress">0/0</span>
-    <div id="load-bar"><div id="load-fill"></div></div>
-</div>
+<div id="loading">Initialisation de la carte...</div>
 
 <div id="panel">
     <div id="panel-header">
@@ -682,6 +711,11 @@ html, body {{ height: 100%; font-family: -apple-system, BlinkMacSystemFont, "Seg
 </div>
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+// ── Données GeoJSON embarquées ──
+{data_scripts_str}
+{lookup_js}
+</script>
 <script>
 const VERSIONS = {versions_js};
 
@@ -726,13 +760,11 @@ Object.keys(basemaps).forEach((name, i) => {{
 
 let activeVersion = null;
 const loadedLayers = {{}};
-const loadedData = {{}};
 
 function formatPopup(props, clId, vKey) {{
     const meta = VERSIONS[vKey].clusters[clId];
-    const isUnclassified = clId == -1;
-    const headerColor = isUnclassified ? '#999' : meta.color;
-    const headerText = isUnclassified ? 'Parcelle non classée' : `Cluster ${{clId}} — ${{meta.name}}`;
+    const headerColor = meta.color;
+    const headerText = `Cluster ${{clId}} — ${{meta.name}}`;
 
     let html = `<div style="font-family:sans-serif;font-size:13px;min-width:220px;">`;
     html += `<div style="background:${{headerColor}};color:white;padding:6px 10px;margin:-1px -1px 8px;border-radius:4px 4px 0 0;font-weight:bold;">`;
@@ -757,59 +789,37 @@ function formatPopup(props, clId, vKey) {{
     return html;
 }}
 
-async function loadVersion(vKey) {{
-    if (loadedData[vKey]) return;
+function buildLayers(vKey) {{
+    if (loadedLayers[vKey]) return;
 
     const version = VERSIONS[vKey];
     const clusters = version.clusters;
     const ids = Object.keys(clusters).sort((a, b) => a - b);
-    const total = ids.length;
-    let loaded = 0;
-
-    const loadingEl = document.getElementById('loading');
-    const progressEl = document.getElementById('progress');
-    const loadFill = document.getElementById('load-fill');
-    loadingEl.style.display = 'block';
-    progressEl.textContent = `0/${{total}}`;
-    loadFill.style.width = '0%';
-
     loadedLayers[vKey] = {{}};
 
-    for (let i = 0; i < ids.length; i += 2) {{
-        const batch = ids.slice(i, i + 2);
-        await Promise.all(batch.map(async (clId) => {{
-            const meta = clusters[clId];
-            try {{
-                const resp = await fetch(meta.file);
-                const geojson = await resp.json();
-                const isUnclassified = clId == -1;
-                const layer = L.geoJSON(geojson, {{
-                    renderer: canvasRenderer,
-                    style: () => ({{
-                        fillColor: meta.color,
-                        color: '#333333',
-                        weight: 0.4,
-                        fillOpacity: isUnclassified ? 0.3 : 0.85,
-                    }}),
-                    onEachFeature: (feature, layer) => {{
-                        layer.bindPopup(() => formatPopup(feature.properties, clId, vKey), {{ maxWidth: 320 }});
-                    }}
-                }});
-                loadedLayers[vKey][clId] = layer;
-            }} catch (e) {{
-                console.error(`Erreur ${{vKey}} cluster ${{clId}}:`, e);
-            }}
-            loaded++;
-            progressEl.textContent = `${{loaded}}/${{total}}`;
-            loadFill.style.width = `${{(loaded / total * 100).toFixed(0)}}%`;
-        }}));
-    }}
+    ids.forEach(clId => {{
+        const meta = clusters[clId];
+        const geojson = GEOJSON_DATA[vKey][clId];
+        if (!geojson) return;
 
-    loadedData[vKey] = true;
-    setTimeout(() => {{ loadingEl.style.display = 'none'; }}, 300);
+        const layer = L.geoJSON(geojson, {{
+            renderer: canvasRenderer,
+            style: () => ({{
+                fillColor: meta.color,
+                color: '#333333',
+                weight: 0.4,
+                fillOpacity: 0.85,
+            }}),
+            onEachFeature: (feature, layer) => {{
+                layer.bindPopup(() => formatPopup(feature.properties, clId, vKey), {{ maxWidth: 320 }});
+            }}
+        }});
+        loadedLayers[vKey][clId] = layer;
+    }});
 }}
 
-async function switchVersion(vKey) {{
+function switchVersion(vKey) {{
+    // Masquer les couches de la version active
     if (activeVersion && loadedLayers[activeVersion]) {{
         Object.values(loadedLayers[activeVersion]).forEach(layer => map.removeLayer(layer));
     }}
@@ -826,7 +836,8 @@ async function switchVersion(vKey) {{
         : '';
     subtitleEl.innerHTML = `<span>${{VERSIONS[vKey].subtitle}}</span>${{pdfLink}}`;
 
-    await loadVersion(vKey);
+    // Construire les couches si pas encore fait
+    buildLayers(vKey);
 
     const clusters = VERSIONS[vKey].clusters;
     const ids = Object.keys(clusters).sort((a, b) => a - b);
@@ -843,16 +854,13 @@ async function switchVersion(vKey) {{
         const layer = loadedLayers[vKey][clId];
         if (layer) layer.addTo(map);
 
-        const isUnclassified = clId == -1;
-        const displayName = isUnclassified ? 'Non classé (sans bâtiment)' : `${{clId}}: ${{meta.name}}`;
-
         const div = document.createElement('div');
         div.className = 'cluster-option';
         div.innerHTML = `
             <input type="checkbox" id="cl_${{vKey}}_${{clId}}" checked>
-            <div class="cluster-swatch" style="background:${{meta.color}};${{isUnclassified ? 'opacity:0.4;' : ''}}"></div>
+            <div class="cluster-swatch" style="background:${{meta.color}};"></div>
             <div>
-                <span class="cluster-label">${{displayName}}</span><br>
+                <span class="cluster-label">${{clId}}: ${{meta.name}}</span><br>
                 <span class="cluster-count">${{meta.count.toLocaleString('fr-FR')}} parcelles</span>
             </div>`;
         div.querySelector('input').addEventListener('change', (e) => {{
@@ -863,6 +871,8 @@ async function switchVersion(vKey) {{
         }});
         ccContainer.appendChild(div);
     }});
+
+    document.getElementById('loading').style.display = 'none';
 }}
 
 function toggleAll(show) {{
@@ -879,6 +889,7 @@ function toggleAll(show) {{
     }});
 }}
 
+// ── Onglets ──
 const tabsContainer = document.getElementById('tabs');
 Object.keys(VERSIONS).forEach(vKey => {{
     const tab = document.createElement('div');
@@ -889,6 +900,7 @@ Object.keys(VERSIONS).forEach(vKey => {{
     tabsContainer.appendChild(tab);
 }});
 
+// ── Toggle panneau ──
 const panelBody = document.getElementById('panel-body');
 const toggleIcon = document.getElementById('toggle-icon');
 document.getElementById('panel-header').addEventListener('click', () => {{
@@ -897,67 +909,17 @@ document.getElementById('panel-header').addEventListener('click', () => {{
     toggleIcon.innerHTML = hidden ? '&#9660;' : '&#9654;';
 }});
 
+// ── Démarrage ──
 switchVersion(Object.keys(VERSIONS)[0]);
 </script>
 </body>
 </html>"""
 
     html_path = os.path.join(OUTPUT_DIR, "index.html")
-    os.makedirs(OUTPUT_DIR, exist_ok=True)
     with open(html_path, "w") as f:
         f.write(html)
-    logger.info("HTML parcellaire : %s", html_path)
-    return html_path
-
-
-def generate_map(
-    parcelles: gpd.GeoDataFrame,
-    all_cluster_names: dict[str, dict[int, str]],
-) -> str:
-    """Génère la carte web interactive des parcelles.
-
-    Parameters
-    ----------
-    parcelles : gpd.GeoDataFrame
-        Parcelles enrichies avec clusters V3 et V4.
-    all_cluster_names : dict
-        Mapping version → {cluster_id → nom}.
-
-    Returns
-    -------
-    str
-        Chemin du fichier HTML.
-    """
-    # Nettoyer les anciens GeoJSON
-    data_dir = os.path.join(OUTPUT_DIR, "data")
-    if os.path.exists(data_dir):
-        for f in os.listdir(data_dir):
-            if f.endswith(".geojson"):
-                os.remove(os.path.join(data_dir, f))
-
-    all_versions_meta = {}
-
-    for vkey, vcfg in VERSIONS.items():
-        cluster_names = all_cluster_names[vkey]
-        cluster_meta, n_total = export_parcelles_geojson(
-            parcelles, vkey, cluster_names,
-        )
-        all_versions_meta[vkey] = {
-            "title": vcfg["title"],
-            "subtitle": vcfg["subtitle"],
-            "n_total": n_total,
-            "pdf": vcfg.get("pdf", ""),
-            "clusters": cluster_meta,
-        }
-
-    html_path = generate_html(all_versions_meta)
-
-    total_size = sum(
-        os.path.getsize(os.path.join(r, f))
-        for r, _, files in os.walk(OUTPUT_DIR)
-        for f in files
-    )
-    logger.info("Dossier carte : %s (%.1f MB)", OUTPUT_DIR, total_size / 1e6)
+    fsize = os.path.getsize(html_path) / 1e6
+    logger.info("HTML parcellaire : %s (%.1f MB)", html_path, fsize)
     return html_path
 
 
