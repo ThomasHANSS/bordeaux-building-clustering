@@ -38,12 +38,14 @@ VERSIONS = {
         "subtitle": "150k bâtiments, KMeans k=15",
         "data_path": "data/processed/clustered_petit_residentiel.geoparquet",
         "label_col": "km_label",
+        "pdf": "reports/clustering_bordeaux_v3.pdf",
     },
     "v4": {
         "title": "Clustering v4 — Bâti récent (≤10 ans)",
         "subtitle": "7k bâtiments (≥2016), KMeans k=10",
         "data_path": "data/processed/clustered_recent.geoparquet",
         "label_col": "v4_label",
+        "pdf": "reports/clustering_bordeaux_v4.pdf",
     },
 }
 
@@ -199,7 +201,9 @@ html, body {{ height: 100%; font-family: -apple-system, BlinkMacSystemFont, "Seg
 .tab:hover {{ background: #f0f0f0; }}
 .tab.active {{ color: #1a1a2e; border-bottom-color: #4363d8; background: white; }}
 #version-subtitle {{ padding: 6px 14px; font-size: 11px; color: #888; background: #f8f8f8;
-    border-bottom: 1px solid #eee; }}
+    border-bottom: 1px solid #eee; display: flex; justify-content: space-between; align-items: center; }}
+#version-subtitle a {{ color: #4363d8; text-decoration: none; font-weight: 600; font-size: 11px; }}
+#version-subtitle a:hover {{ text-decoration: underline; }}
 
 .basemap-option {{ display: flex; align-items: center; padding: 3px 0; cursor: pointer; }}
 .basemap-option input {{ margin-right: 8px; cursor: pointer; }}
@@ -398,8 +402,12 @@ async function switchVersion(vKey) {{
         t.classList.toggle('active', t.dataset.version === vKey);
     }});
 
-    // Update subtitle
-    document.getElementById('version-subtitle').textContent = VERSIONS[vKey].subtitle;
+    // Update subtitle + PDF link
+    const subtitleEl = document.getElementById('version-subtitle');
+    const pdfLink = VERSIONS[vKey].pdf
+        ? `<a href="${{VERSIONS[vKey].pdf}}" target="_blank">&#128196; Rapport PDF</a>`
+        : '';
+    subtitleEl.innerHTML = `<span>${{VERSIONS[vKey].subtitle}}</span>${{pdfLink}}`;
 
     // Load if needed
     await loadVersion(vKey);
@@ -503,6 +511,7 @@ def main() -> None:
             "title": cfg["title"],
             "subtitle": cfg["subtitle"],
             "n_total": n_total,
+            "pdf": cfg.get("pdf", ""),
             "clusters": cluster_meta,
         }
 
