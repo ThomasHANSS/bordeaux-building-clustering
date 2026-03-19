@@ -135,6 +135,51 @@ def main() -> None:
     fig.savefig("outputs/figures/report_v3_boxplots.png", dpi=200, bbox_inches="tight")
     plt.close()
 
+    # ── Parcellaire : charger et préparer ──
+    logger.info("Parcellaire...")
+    parc = gpd.read_parquet("data/processed/parcellaire_clustered.geoparquet")
+    parc_v3 = parc[parc["cluster_v3"] >= 0].copy()
+    n_parc = len(parc_v3)
+    logger.info("  %d parcelles classées V3", n_parc)
+
+    # Barplot parcelles vs bâtiments par cluster
+    fig, ax = plt.subplots(figsize=(16, 7))
+    x = np.arange(len(labels_sorted))
+    w = 0.35
+    bat_counts = [len(gdf[gdf[LABEL_COL] == cl]) for cl in labels_sorted]
+    parc_counts = [len(parc_v3[parc_v3["cluster_v3"] == cl]) for cl in labels_sorted]
+    bars1 = ax.bar(x - w/2, bat_counts, w, label="Bâtiments", color="#4363d8", alpha=0.8)
+    bars2 = ax.bar(x + w/2, parc_counts, w, label="Parcelles", color="#3cb44b", alpha=0.8)
+    ax.set_xticks(x)
+    ax.set_xticklabels([f"{cl}: {names[cl][:25]}" for cl in labels_sorted],
+                       fontsize=7, rotation=55, ha="right")
+    ax.set_ylabel("Nombre", fontsize=11)
+    ax.set_title("Bâtiments vs Parcelles par cluster", fontsize=14, fontweight="bold")
+    ax.legend(fontsize=10)
+    for bar, val in zip(bars2, parc_counts):
+        ax.text(bar.get_x() + bar.get_width()/2, bar.get_height() + 200,
+                f"{val:,}".replace(",", " "), ha="center", fontsize=6, fontweight="bold", color="#3cb44b")
+    plt.tight_layout()
+    fig.savefig("outputs/figures/report_v3_parcelles_effectifs.png", dpi=200, bbox_inches="tight")
+    plt.close()
+
+    # Boxplot CES par cluster
+    fig, ax = plt.subplots(figsize=(16, 6))
+    ces_data = [parc_v3[parc_v3["cluster_v3"] == cl]["ces_v3"].clip(0, 1).dropna().values for cl in labels_sorted]
+    bp = ax.boxplot(ces_data, tick_labels=[f"{cl}: {names[cl][:25]}" for cl in labels_sorted],
+                     patch_artist=True, showfliers=False)
+    for j, patch in enumerate(bp["boxes"]):
+        patch.set_facecolor(COLORS[labels_sorted[j] % len(COLORS)])
+    ax.set_ylabel("CES (emprise bâtie / surface parcelle)", fontsize=11)
+    ax.set_title("Coefficient d'Emprise au Sol par cluster", fontsize=14, fontweight="bold")
+    ax.tick_params(axis="x", rotation=55, labelsize=7)
+    ax.set_ylim(0, 1)
+    ax.axhline(y=0.5, color="red", linestyle="--", alpha=0.3, label="CES = 50%")
+    ax.legend(fontsize=9)
+    plt.tight_layout()
+    fig.savefig("outputs/figures/report_v3_parcelles_ces.png", dpi=200, bbox_inches="tight")
+    plt.close()
+
     # ── Distribution matériaux par cluster ──
     logger.info("Matériaux...")
     mat_data = {}
@@ -250,9 +295,62 @@ def main() -> None:
     iw, ih = fit("outputs/figures/report_v3_materiaux.png", pw, 10*cm)
     story.append(Image("outputs/figures/report_v3_materiaux.png", width=iw, height=ih))
 
+    # ── Parcellaire ──
+    story.append(Paragraph("5. Analyse parcellaire", styles["Section"]))
+    story.append(Paragraph(
+        f"Jointure spatiale des {n_parc:,} parcelles classées (sur {len(parc):,} parcelles métropole) "
+        "aux bâtiments clusterisés. Chaque parcelle prend le cluster du bâtiment dominant "
+        "(plus grande emprise au sol).".replace(",", " "),
+        styles["Body2"]))
+    story.append(Spacer(1, 0.3*cm))
+
+    # Tableau parcellaire
+    story.append(Paragraph("Indicateurs parcellaires par cluster", styles["SubSec"]))
+    p_header = ["Cl.", "Nom", "Parcelles", "Surf. parc.", "CES méd.", "Bât./parc."]
+    p_tdata = [p_header]
+    for cl in sorted(names):
+        psub = parc_v3[parc_v3["cluster_v3"] == cl]
+        if len(psub) == 0:
+            continue
+        sp = psub["surface_parcelle"].median()
+        ces = psub["ces_v3"].median()
+        nb = psub["nb_batiments_v3"].median()
+        p_tdata.append([
+            str(cl), names[cl][:32], f"{len(psub):,}".replace(",", " "),
+            f"{sp:.0f} m²", f"{ces*100:.1f}%", f"{nb:.1f}",
+        ])
+    p_cw = [0.7*cm, 4.8*cm, 1.5*cm, 1.5*cm, 1.3*cm, 1.3*cm]
+    pt = Table(p_tdata, colWidths=p_cw, repeatRows=1)
+    p_ts = [("BACKGROUND",(0,0),(-1,0),HexColor("#2d5016")),("TEXTCOLOR",(0,0),(-1,0),white),
+          ("FONTNAME",(0,0),(-1,0),"Helvetica-Bold"),("FONTSIZE",(0,0),(-1,-1),6.5),
+          ("ALIGN",(0,0),(-1,-1),"CENTER"),("ALIGN",(1,1),(1,-1),"LEFT"),
+          ("GRID",(0,0),(-1,-1),0.4,grey),("ROWBACKGROUNDS",(0,1),(-1,-1),[white,HexColor("#f0f5f0")]),
+          ("TOPPADDING",(0,0),(-1,-1),2),("BOTTOMPADDING",(0,0),(-1,-1),2)]
+    for i, cl in enumerate(sorted(names)):
+        p_ts.append(("BACKGROUND",(0,i+1),(0,i+1),HexColor(COLORS[cl % len(COLORS)])))
+        p_ts.append(("TEXTCOLOR",(0,i+1),(0,i+1),white))
+    pt.setStyle(TableStyle(p_ts))
+    story.append(pt)
+    story.append(Spacer(1, 0.3*cm))
+
+    # Figures parcellaires
+    iw, ih = fit("outputs/figures/report_v3_parcelles_effectifs.png", pw, 9*cm)
+    story.append(Image("outputs/figures/report_v3_parcelles_effectifs.png", width=iw, height=ih))
+    story.append(PageBreak())
+
+    story.append(Paragraph("CES par cluster", styles["SubSec"]))
+    iw, ih = fit("outputs/figures/report_v3_parcelles_ces.png", pw, 9*cm)
+    story.append(Image("outputs/figures/report_v3_parcelles_ces.png", width=iw, height=ih))
+    story.append(Spacer(1, 0.3*cm))
+    story.append(Paragraph(
+        "Le CES (Coefficient d'Emprise au Sol) mesure le rapport entre l'emprise bâtie et la surface "
+        "de la parcelle. Un CES élevé indique une parcelle densément bâtie (centre-ville), un CES faible "
+        "une parcelle avec jardin (pavillonnaire).",
+        styles["Body2"]))
+
     # ── Description des clusters (compact, 2 colonnes implicites) ──
     story.append(Spacer(1, 0.4*cm))
-    story.append(Paragraph("5. Description des clusters", styles["Section"]))
+    story.append(Paragraph("6. Description des clusters", styles["Section"]))
     for cl in sorted(names):
         sub = gdf[gdf[LABEL_COL] == cl]
         s = sub["surface_bat"].median(); h = sub["hauteur_mean"].median()
@@ -269,7 +367,7 @@ def main() -> None:
     story.append(PageBreak())
 
     # ── Conclusions ──
-    story.append(Paragraph("6. Conclusions", styles["Section"]))
+    story.append(Paragraph("7. Conclusions", styles["Section"]))
     for p in [
         "15 typologies clairement différenciées par surface, hauteur, période et matériaux",
         "Les pavillons (clusters 0, 1, 2, 5) représentent ~55% du stock résidentiel individuel",
