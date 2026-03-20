@@ -148,7 +148,16 @@ let activeVersion = null;
 const loadedLayers = {};
 const loadedData = {};
 
-function formatPopup(props, clId, vKey) {
+function centroid(geometry) {
+    const coords = geometry.type === 'MultiPolygon'
+        ? geometry.coordinates.flat(2)
+        : geometry.coordinates.flat();
+    let sumLat = 0, sumLng = 0;
+    for (const [lng, lat] of coords) { sumLat += lat; sumLng += lng; }
+    return [sumLat / coords.length, sumLng / coords.length];
+}
+
+function formatPopup(props, clId, vKey, geometry) {
     const meta = VERSIONS[vKey].clusters[clId];
     const isParcelle = VERSIONS[vKey].type === 'parcelle';
 
@@ -184,7 +193,23 @@ function formatPopup(props, clId, vKey) {
         html += `<tr><td style="padding:2px 6px;color:#666;white-space:nowrap;">${k}</td>
                      <td style="padding:2px 6px;font-weight:500;">${v}</td></tr>`;
     });
-    html += '</table></div>';
+    html += '</table>';
+
+    // Street View link
+    let svLat = props._lat, svLng = props._lng;
+    if (svLat == null && geometry) {
+        [svLat, svLng] = centroid(geometry);
+    }
+    if (svLat != null && svLng != null) {
+        const svUrl = `https://www.google.com/maps/@?api=1&map_action=pano&viewpoint=${svLat},${svLng}`;
+        html += `<div style="text-align:center;margin:8px 0 4px;">`;
+        html += `<a href="${svUrl}" target="_blank" rel="noopener" `;
+        html += `style="display:inline-block;padding:6px 14px;background:#4285F4;color:white;`;
+        html += `border-radius:4px;text-decoration:none;font-size:12px;font-weight:600;">`;
+        html += `&#128065; Street View</a></div>`;
+    }
+
+    html += '</div>';
     return html;
 }
 
@@ -223,7 +248,7 @@ async function loadVersion(vKey) {
                         fillOpacity: isParcelle ? 0.85 : 1.0,
                     }),
                     onEachFeature: (feature, layer) => {
-                        layer.bindPopup(() => formatPopup(feature.properties, clId, vKey), { maxWidth: 320 });
+                        layer.bindPopup(() => formatPopup(feature.properties, clId, vKey, feature.geometry), { maxWidth: 320 });
                     }
                 });
                 loadedLayers[vKey][clId] = layer;
