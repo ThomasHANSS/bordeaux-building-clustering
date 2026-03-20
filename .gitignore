@@ -34,4 +34,3 @@ venv/
 .idea/
 *.swp
 *.swo
-outputs/maps/webmap_satellite/data/
