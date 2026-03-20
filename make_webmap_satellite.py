@@ -12,6 +12,7 @@ import json
 import logging
 import os
 import gc
+import time
 import numpy as np
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s | %(message)s")
@@ -110,6 +111,11 @@ def export_version(version_key: str) -> tuple[dict, int]:
     # Reprojeter
     gdf = gdf.to_crs("EPSG:4326")
 
+    # Centroïde pour Street View (calculé avant nettoyage NaN)
+    centroids = gdf.geometry.centroid
+    gdf["_lat"] = centroids.y.round(6)
+    gdf["_lng"] = centroids.x.round(6)
+
     # Nettoyer NaN
     for col in gdf.columns:
         if col == "geometry":
@@ -158,11 +164,14 @@ def generate_html(all_versions: dict) -> str:
     """Génère le HTML Leaflet avec onglets multi-version."""
 
     versions_js = json.dumps(all_versions, ensure_ascii=False)
+    cache_bust = int(time.time())
 
     html = f"""<!DOCTYPE html>
 <html lang="fr">
 <head>
 <meta charset="UTF-8">
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Clustering bâtiments — Bordeaux Métropole</title>
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
@@ -332,7 +341,19 @@ function formatPopup(props, clId, vKey) {{
         html += `<tr><td style="padding:2px 6px;color:#666;white-space:nowrap;">${{k}}</td>
                      <td style="padding:2px 6px;font-weight:500;">${{v}}</td></tr>`;
     }});
-    html += '</table></div>';
+    html += '</table>';
+
+    // Street View link
+    if (props._lat != null && props._lng != null) {{
+        const svUrl = `https://www.google.com/maps/@?api=1&map_action=pano&viewpoint=${{props._lat}},${{props._lng}}`;
+        html += `<div style="text-align:center;margin:8px 0 4px;">`;
+        html += `<a href="${{svUrl}}" target="_blank" rel="noopener" `;
+        html += `style="display:inline-block;padding:6px 14px;background:#4285F4;color:white;`;
+        html += `border-radius:4px;text-decoration:none;font-size:12px;font-weight:600;">`;
+        html += `&#128065; Street View</a></div>`;
+    }}
+
+    html += '</div>';
     return html;
 }}
 
@@ -360,7 +381,7 @@ async function loadVersion(vKey) {{
         await Promise.all(batch.map(async (clId) => {{
             const meta = clusters[clId];
             try {{
-                const resp = await fetch(meta.file);
+                const resp = await fetch(meta.file + '?v={cache_bust}');
                 const geojson = await resp.json();
                 const layer = L.geoJSON(geojson, {{
                     renderer: canvasRenderer,
@@ -370,8 +391,8 @@ async function loadVersion(vKey) {{
                         weight: 0.8,
                         fillOpacity: 1.0,
                     }}),
-                    onEachFeature: (feature, layer) => {{
-                        layer.bindPopup(() => formatPopup(feature.properties, clId, vKey), {{ maxWidth: 300 }});
+                    onEachFeature: (feature, lyr) => {{
+                        lyr.bindPopup(() => formatPopup(feature.properties, clId, vKey), {{ maxWidth: 300 }});
                     }}
                 }});
                 loadedLayers[vKey][clId] = layer;
